@@ -1,0 +1,27 @@
+# ReCode local database
+.recode
+
+# Added by code-review-graph
+.code-review-graph/
+local_cache/
+
+# Build directory
+build/
+
+# Pipeline demo IR dumps (scripts/run_pipeline_demo.sh)
+output/
+*.out
+
+# LIT artifacts (must use build/test/lit via ninja check-ai-compiler; ignore if created in-tree)
+test/lit/Output/
+test/lit/.lit_test_times.txt
+
+# Code workspace for cursor
+*.code-workspace
+
+# Audit files
+.audit
+*audit*
+
+# CMake commands
+cmake.cmd
