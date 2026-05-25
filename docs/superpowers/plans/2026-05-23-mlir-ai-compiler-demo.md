@@ -12,7 +12,7 @@
 
 ## Task 1: CMake + TableGen scaffolding ✅
 
-- [x] Root CMake, `Passes.td`, libs `AICompilerTransforms`, `AICompilerPipeline`, tool `ai-compiler-demo`
+- [x] Root CMake, `Passes.td`, libs `AICompilerTransforms`, `AICompilerPipeline`, tool `pipe-demo`
 - [x] `CMAKE_EXPORT_COMPILE_COMMANDS=ON`
 
 ## Task 2: Conv+BN fusion pass ✅
@@ -37,7 +37,7 @@
 ## Task 5: Driver + tests ✅
 
 - [x] `test/mini_model.mlir`, `conv_bn_relu.mlir`, `matmul_add.mlir`
-- [x] `test/run_tests.sh`
+- [x] `scripts/test_pipeline_demo.sh`
 - [x] JIT on `matmul_add.mlir`
 
 ## Task 6: Documentation ✅
@@ -46,7 +46,7 @@
 
 ## Task 7: LIT (optional) ✅
 
-- [x] `test/lit/conv_bn_fusion.mlir` + `test/CMakeLists.txt` (`check-ai-compiler` when `lit`+`FileCheck` found)
+- [x] `test/lit/conv_bn_fusion.mlir` + `test/CMakeLists.txt` (`test_lit_filecheck` when `lit`+`FileCheck` found)
 
 ---
 
@@ -63,8 +63,8 @@ Spec §Custom pass summary; each stage has at least one custom pass beyond upstr
 
 ## Task 9: Demo automation + docs sync ✅
 
-- [x] `scripts/run_pipeline_demo.sh` + CMake target `run-pipeline-demo`
-- [x] README: toolchain ( `/usr/local` vs `llvm-*-tools` ), testing (run_tests vs LIT vs check-ai-compiler)
+- [x] `scripts/run_pipeline_demo.sh` + CMake target `run_pipeline_demo`
+- [x] README: toolchain ( `/usr/local` vs `llvm-*-tools` ), testing scripts vs LIT/FileCheck targets
 - [x] README + spec: dialect paths (SCF/CF/LLVM in-repo; Affine/Vector as production reference)
 - [x] README + spec: `mlir_compiler` gpu Stage 6–12 ↔ `mlir_pass` cross-reference table
 - [x] Spec/plan alignment (this revision)
@@ -76,10 +76,10 @@ Spec §Custom pass summary; each stage has at least one custom pass beyond upstr
 ```bash
 cmake -B build -G Ninja -DCMAKE_PREFIX_PATH=/usr/local -DSTABLEHLO_LIB_DIR=/usr/local/lib
 ninja -C build
-ninja -C build test-ai-compiler              # shell regression (= bash test/run_tests.sh)
-ninja -C build check-ai-compiler             # LIT only (= bash test/run_tests.sh --lit)
-ninja -C build test-ai-compiler-all          # shell + LIT (= bash test/run_tests.sh --all)
-ninja -C build run-pipeline-demo             # optional IR dumps
+ninja -C build test_pipeline_demo              # shell regression (= bash scripts/test_pipeline_demo.sh)
+ninja -C build test_lit_filecheck             # LIT only (= bash scripts/test_lit_filecheck.sh)
+ninja -C build test_all                       # shell + LIT (= bash scripts/test_all.sh)
+ninja -C build run_pipeline_demo             # optional IR dumps
 ```
 
 ---

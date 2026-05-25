@@ -4,7 +4,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-DEMO="${AI_COMPILER_DEMO:-${ROOT}/build/tools/ai-compiler-demo/ai-compiler-demo}"
+DEMO="${PIPE_DEMO:-${ROOT}/build/tools/ai-compiler-demo/pipe-demo}"
 OUT="${ROOT}/output/pipeline-dumps/latest"
 VECTORIZE_FLAG=(--no-vectorize)
 
@@ -70,4 +70,4 @@ echo "  mini_model/after-loops.mlir      — scf/cf loops"
 echo "  mini_model/after-llvm-final.mlir — LLVM dialect"
 echo "  */00-full-pipeline-with-pass-dumps.txt — pass-by-pass trace (--dump-ir)"
 echo
-echo "Regression: bash test/run_tests.sh [--all]"
+echo "Regression: bash scripts/test_pipeline_demo.sh"

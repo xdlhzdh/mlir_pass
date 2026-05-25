@@ -12,7 +12,7 @@ build/
 output/
 *.out
 
-# LIT artifacts (must use build/test/lit via ninja check-ai-compiler; ignore if created in-tree)
+# LIT artifacts (must use build/test/lit via ninja test_lit_filecheck; ignore if created in-tree)
 test/lit/Output/
 test/lit/.lit_test_times.txt
 

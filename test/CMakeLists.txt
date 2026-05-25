@@ -15,8 +15,6 @@ find_program(LIT_EXE NAMES lit llvm-lit
   HINTS ${_llvm_tool_hints} ENV LLVM_TOOLS_BINARY_DIR)
 
 if(FILECHECK_EXE AND LIT_EXE)
-  get_filename_component(_fc_dir "${FILECHECK_EXE}" DIRECTORY)
-
   set(_lit_dir "${CMAKE_CURRENT_BINARY_DIR}/lit")
   file(MAKE_DIRECTORY "${_lit_dir}")
 
@@ -24,25 +22,25 @@ if(FILECHECK_EXE AND LIT_EXE)
   file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/lit/conv_bn_fusion.mlir"
        DESTINATION "${_lit_dir}")
 
-  add_custom_target(check-ai-compiler
-    COMMAND ${CMAKE_COMMAND} -E env "PATH=${_fc_dir}"
-            "${LIT_EXE}" -sv "${_lit_dir}"
-    DEPENDS ai-compiler-demo
+  add_custom_target(test_lit_filecheck
+    COMMAND ${CMAKE_COMMAND} -E env "LIT_EXE=${LIT_EXE}" "FILECHECK_EXE=${FILECHECK_EXE}"
+            bash ${CMAKE_SOURCE_DIR}/scripts/test_lit_filecheck.sh
+    DEPENDS pipe-demo
     WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
     COMMENT "Running AI compiler LIT tests")
 
-  add_custom_target(test-ai-compiler-all
-    COMMAND bash ${CMAKE_SOURCE_DIR}/test/run_tests.sh --all
+  add_custom_target(test_all
+    COMMAND bash ${CMAKE_SOURCE_DIR}/scripts/test_all.sh
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-    DEPENDS ai-compiler-demo check-ai-compiler
+    DEPENDS pipe-demo
     COMMENT "Shell regression + LIT/FileCheck")
 else()
-  message(STATUS "lit / FileCheck not found — check-ai-compiler target skipped")
+  message(STATUS "lit / FileCheck not found — test_lit_filecheck target skipped")
 endif()
 
-# Shell regression (always available when ai-compiler-demo is built).
-add_custom_target(test-ai-compiler
-  COMMAND bash ${CMAKE_SOURCE_DIR}/test/run_tests.sh
+# Shell regression (always available when pipe-demo is built).
+add_custom_target(test_pipeline_demo
+  COMMAND bash ${CMAKE_SOURCE_DIR}/scripts/test_pipeline_demo.sh
   WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-  DEPENDS ai-compiler-demo
+  DEPENDS pipe-demo
   COMMENT "Shell regression tests (pipeline + fusion + JIT)")

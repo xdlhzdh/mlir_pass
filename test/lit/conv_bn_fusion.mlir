@@ -1,4 +1,4 @@
-// RUN: %ai-compiler-demo --input=%s --pipeline-stop-after=fusion 2>&1 | FileCheck %s
+// RUN: %pipe-demo --input=%s --pipeline-stop-after=fusion 2>&1 | FileCheck %s
 // CHECK-NOT: batch_norm_inference
 // CHECK: stablehlo.convolution
 // CHECK: stablehlo.add

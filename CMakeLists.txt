@@ -41,9 +41,9 @@ add_subdirectory(test)
 
 # One-click pipeline demo: per-stage IR files under output/pipeline-dumps/latest/
 add_custom_target(
-  run-pipeline-demo
-  COMMAND ${CMAKE_COMMAND} -E env AI_COMPILER_DEMO=${CMAKE_BINARY_DIR}/tools/ai-compiler-demo/ai-compiler-demo
+  run_pipeline_demo
+  COMMAND ${CMAKE_COMMAND} -E env PIPE_DEMO=${CMAKE_BINARY_DIR}/tools/ai-compiler-demo/pipe-demo
           bash ${CMAKE_SOURCE_DIR}/scripts/run_pipeline_demo.sh
   WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-  DEPENDS ai-compiler-demo
+  DEPENDS pipe-demo
   COMMENT "Run full pipeline on all test .mlir files; write IR dumps to output/pipeline-dumps/latest/")

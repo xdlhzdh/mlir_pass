@@ -1,9 +1,9 @@
 get_property(dialect_libs GLOBAL PROPERTY MLIR_DIALECT_LIBS)
 get_property(conversion_libs GLOBAL PROPERTY MLIR_CONVERSION_LIBS)
 
-add_executable(ai-compiler-demo main.cpp)
+add_executable(pipe-demo main.cpp)
 
-target_link_libraries(ai-compiler-demo PRIVATE
+target_link_libraries(pipe-demo PRIVATE
   AICompilerPipeline
   AICompilerTransforms
   MLIRParser
@@ -22,7 +22,7 @@ target_link_libraries(ai-compiler-demo PRIVATE
   -Wl,--end-group
 )
 
-target_include_directories(ai-compiler-demo PRIVATE
+target_include_directories(pipe-demo PRIVATE
   ${PROJECT_SOURCE_DIR}/include
   ${CMAKE_CURRENT_SOURCE_DIR}/../../lib/Transforms
 )

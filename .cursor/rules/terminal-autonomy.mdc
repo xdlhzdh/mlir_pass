@@ -10,7 +10,7 @@ alwaysApply: true
 Run these **directly** when they support the current task—do not ask permission first:
 
 - **Build / compile:** `cmake`, `ninja`, `make`, `clang`, `cargo build`, etc.
-- **Test:** `ctest`, `lit`, `bash test/run_tests.sh`, project test binaries
+- **Test:** `ctest`, `lit`, `bash scripts/test_pipeline_demo.sh`, project test binaries
 - **Git (read + normal write):** `status`, `diff`, `log`, `branch`, `add`, `commit` (only when user asked to commit), `fetch`, `pull`, `push` (only when user asked to push)
 - **Install / deps:** `pip install`, `npm install`, `apt`/`dnf` package installs when required for the task
 - **Run / query:** running built binaries, `--help`, read-only `grep`/`find`/`ls`/`cat`, environment checks
