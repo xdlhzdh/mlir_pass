@@ -25,9 +25,9 @@ Build a demo AI compiler pipeline in C++ using **official MLIR APIs** plus **per
 mlir_pass/
 ├── CMakeLists.txt                    # CMAKE_EXPORT_COMPILE_COMMANDS=ON
 ├── scripts/run_pipeline_demo.sh      # One-click per-stage IR dumps
-├── scripts/test_pipeline_demo.sh     # Required shell regression
+├── scripts/test_pipeline_demo.sh     # Required pipeline regression
 ├── scripts/test_lit_filecheck.sh     # Optional LIT/FileCheck regression
-├── scripts/test_all.sh               # Shell regression + LIT/FileCheck
+├── scripts/test_all.sh               # Pipeline regression + LIT/FileCheck
 ├── include/AICompiler/
 │   ├── Passes.td / Passes.h
 │   ├── Pipeline.h
@@ -188,9 +188,9 @@ For `batch_norm_inference(conv(x, w), γ, β, μ, σ)` with constant tensors:
 
 | Mechanism | Command | Scope |
 |-----------|---------|-------|
-| Shell regression | `bash scripts/test_pipeline_demo.sh` or `ninja -C build test_pipeline_demo` | Full pipeline, fusion, stop-after, JIT |
+| Pipeline regression | `bash scripts/test_pipeline_demo.sh` or `ninja -C build test_pipeline_demo` | Full pipeline, fusion, stop-after, JIT |
 | LIT only | `bash scripts/test_lit_filecheck.sh` or `ninja -C build test_lit_filecheck` | `test/lit/*.mlir` via lit + FileCheck |
-| Shell + LIT | `bash scripts/test_all.sh` or `ninja -C build test_all` | Above + FileCheck on fusion IR |
+| Pipeline regression + LIT | `bash scripts/test_all.sh` or `ninja -C build test_all` | Above + FileCheck on fusion IR |
 | Demo dumps | `bash scripts/run_pipeline_demo.sh` or `ninja -C build run_pipeline_demo` | Per-stage IR files (not a test) |
 
 LIT/FileCheck require `lit` and `FileCheck` at cmake configure time. See `README.md` §验证与 IR 落盘.

@@ -1,0 +1,20 @@
+---
+alwaysApply: true
+---
+
+# 🤖 Terminal Discipline (Strict RTK Wrapper)
+ 
+You MUST minimize terminal output to save context window tokens by using the `rtk` wrapper. Do not rely on your own judgment to skip it for noisy commands.
+ 
+**Decision Framework (When to use RTK):**
+1. **Build & Compile (Strictly Required):** ANY command that builds or links code (`cmake`, `ninja`, `make`, `clang`). -> RUN `rtk <command>`
+2. **Testing (Strictly Required):** ANY command that runs test suites (`ctest`, `lit`, `./build/bin/test`). -> RUN `rtk <command>`
+3. **Search & IO (Strictly Required):** ANY command that reads files or searches directories (`grep`, `find`, `ls`, `cat`, `git status`). -> RUN `rtk <command>`
+4. **Silent State Changes (Exempt):** Purely silent operations that only change environment state (`cd`, `mkdir`, `rm`, `export`). -> `rtk` NOT needed.
+ 
+**Mental Model:**
+If the command produces more than 5 lines of stdout/stderr, wrap it in `rtk`.
+ 
+**Example:**
+[BAD] `ninja -C build`
+[GOOD] `rtk ninja -C build`

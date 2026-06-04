@@ -76,10 +76,10 @@ Spec §Custom pass summary; each stage has at least one custom pass beyond upstr
 ```bash
 cmake -B build -G Ninja -DCMAKE_PREFIX_PATH=/usr/local -DSTABLEHLO_LIB_DIR=/usr/local/lib
 ninja -C build
-ninja -C build test_pipeline_demo              # shell regression (= bash scripts/test_pipeline_demo.sh)
+ninja -C build test_pipeline_demo              # Pipeline regression (= bash scripts/test_pipeline_demo.sh)
 ninja -C build test_lit_filecheck             # LIT only (= bash scripts/test_lit_filecheck.sh)
-ninja -C build test_all                       # shell + LIT (= bash scripts/test_all.sh)
-ninja -C build run_pipeline_demo             # optional IR dumps
+ninja -C build test_all                       # Pipeline regression + LIT (= bash scripts/test_all.sh)
+ninja -C build run_pipeline_demo             # optional IR dumps(= bash scripts/run_pipeline_demo.sh)
 ```
 
 ---

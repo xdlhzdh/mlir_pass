@@ -19,6 +19,9 @@ test/lit/.lit_test_times.txt
 # Code workspace for cursor
 *.code-workspace
 
+# Local MCP config (may contain API tokens)
+.cursor/mcp.json
+
 # Audit files
 .audit
 *audit*

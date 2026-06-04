@@ -2,7 +2,7 @@
 
 将 StableHLO 子图（Conv + BN + ReLU + MatMul + Add）经 **Linalg → Bufferize → Loops → LLVM** 降至 LLVM Dialect 的 C++ 演示工程：官方 MLIR Pass + **6 个自定义 teaching pass**，支持 JIT、分阶段 IR 导出与回归测试。
 
-- 概念对齐：[`mlir_compiler`](../mlir_compiler) P5–P9  
+- 概念对齐：[`mlir_compiler`](../mlir_compiler/src/mlir/README.md) P5–P9  
 - 环境安装：[`mlir_compiler` cpu README](../mlir_compiler/src/mlir/cpu/README.md) §1.2–§1.5  
 - 设计细节：[相关文档](#相关文档)
 
@@ -85,6 +85,7 @@ ninja -C build test_pipeline_demo
 完整验证与演示工作流：
 
 ```bash
+ninja -C build test_pipeline_demo   # Pipeline 回归
 ninja -C build test_lit_filecheck   # 仅 LIT/FileCheck（需要 lit + FileCheck）
 ninja -C build test_all             # Pipeline 回归 + LIT/FileCheck
 ninja -C build run_pipeline_demo    # IR 落盘到 output/pipeline-dumps/latest/
