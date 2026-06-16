@@ -39,8 +39,8 @@ else()
 endif()
 
 # Shell regression (always available when pipe-demo is built).
-add_custom_target(test_pipeline_demo
-  COMMAND bash ${CMAKE_SOURCE_DIR}/scripts/test_pipeline_demo.sh
+add_custom_target(test_shell_regression
+  COMMAND bash ${CMAKE_SOURCE_DIR}/scripts/test_shell_regression.sh
   WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
   DEPENDS pipe-demo
-  COMMENT "Shell regression tests (pipeline + fusion + JIT)")
+  COMMENT "Shell regression (pipeline + fusion + JIT)")

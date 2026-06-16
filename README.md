@@ -56,11 +56,11 @@ ninja -C build
 
 - `build/compile_commands.json`：IDE / clangd（`CMAKE_EXPORT_COMPILE_COMMANDS=ON`）
 - `-fno-rtti`：匹配 MLIR ABI（CMake 已设置）
-- CMake 目标：`test_pipeline_demo`（Shell 回归）、`run_pipeline_demo`（IR 落盘）；若找到 lit/FileCheck，另有 `test_lit_filecheck`、`test_all`。
+- CMake 目标：`test_shell_regression`（Shell regression）、`run_pipeline_demo`（IR 落盘）；若找到 lit/FileCheck，另有 `test_lit_filecheck`、`test_all`。
 
 ### 命令速查
 
-按自然执行顺序列出本工程常用命令。`test_pipeline_demo` 与 `test_lit_filecheck` 是 **不同** 的 Ninja target：前者跑 Shell 回归，后者只跑 LIT/FileCheck。
+按自然执行顺序列出本工程常用命令。`test_shell_regression` 与 `test_lit_filecheck` 是 **不同** 的 Ninja target：前者跑 Shell regression，后者只跑 LIT/FileCheck。
 
 | 阶段 | Bash / 可执行文件 | Ninja | 作用 |
 |------|-------------------|-------|------|
@@ -68,9 +68,9 @@ ninja -C build
 | 编译全部 | — | `ninja -C build` | 编译静态库与 `pipe-demo` |
 | 编译驱动 | — | `ninja -C build pipe-demo` | 只构建驱动程序及其依赖 |
 | 运行 pipeline | `./build/tools/ai-compiler-demo/pipe-demo --input=test/mini_model.mlir --no-vectorize` | — | 直接运行完整 pipeline |
-| Pipeline 回归 | `bash scripts/test_pipeline_demo.sh` | `ninja -C build test_pipeline_demo` | 用 Bash + `grep` 断言 pipeline、fusion、stop-after、JIT 正确 |
+| Shell regression | `bash scripts/test_shell_regression.sh` | `ninja -C build test_shell_regression` | 用 Bash + `grep` 断言 pipeline、fusion、stop-after、JIT 正确 |
 | LIT/FileCheck | `bash scripts/test_lit_filecheck.sh` | `ninja -C build test_lit_filecheck` | 只执行 `test/lit/*.mlir` 的 FileCheck 用例 |
-| 全量测试 | `bash scripts/test_all.sh` | `ninja -C build test_all` | 先 Pipeline 回归，再 LIT/FileCheck |
+| 全量测试 | `bash scripts/test_all.sh` | `ninja -C build test_all` | 先 Shell regression，再 LIT/FileCheck |
 | IR 落盘 Demo | `bash scripts/run_pipeline_demo.sh` | `ninja -C build run_pipeline_demo` | 生成各 stage IR 与 pass trace 到 `output/pipeline-dumps/latest/` |
 
 最小工作流：
@@ -78,23 +78,23 @@ ninja -C build
 ```bash
 cmake -B build -G Ninja -DCMAKE_PREFIX_PATH=/usr/local -DSTABLEHLO_LIB_DIR=/usr/local/lib
 ninja -C build
-ninja -C build test_pipeline_demo
+ninja -C build test_shell_regression
 ./build/tools/ai-compiler-demo/pipe-demo --input=test/mini_model.mlir --no-vectorize
 ```
 
 完整验证与演示工作流：
 
 ```bash
-ninja -C build test_pipeline_demo   # Pipeline 回归
+ninja -C build test_shell_regression   # Shell regression
 ninja -C build test_lit_filecheck   # 仅 LIT/FileCheck（需要 lit + FileCheck）
-ninja -C build test_all             # Pipeline 回归 + LIT/FileCheck
+ninja -C build test_all             # Shell regression + LIT/FileCheck
 ninja -C build run_pipeline_demo    # IR 落盘到 output/pipeline-dumps/latest/
 ```
 
 对应脚本入口：
 
 ```bash
-bash scripts/test_pipeline_demo.sh
+bash scripts/test_shell_regression.sh
 bash scripts/test_lit_filecheck.sh
 bash scripts/test_all.sh
 bash scripts/run_pipeline_demo.sh
@@ -231,15 +231,15 @@ StableHLO → Linalg → bufferize(memref) → SCF → CF → LLVM Dialect → J
 
 两者均调用 `pipe-demo`，**互不调用**。完整命令见 [命令速查](#命令速查)。
 
-| | 回归 `scripts/test_pipeline_demo.sh` | Demo `scripts/run_pipeline_demo.sh` |
-|--|--------------------------------------|--------------------------------------|
+| | Shell regression `scripts/test_shell_regression.sh` | Demo `scripts/run_pipeline_demo.sh` |
+|--|-------------------------------------------------------------|--------------------------------------|
 | 目的 | 判断对错（退出码） | 保存 IR 供阅读 |
 | 输出 | 终端 | `output/pipeline-dumps/latest/` |
 | 断言 | 有 | 无 |
 
-### Shell 回归内容
+### Shell regression
 
-`test_pipeline_demo` 等价于 `bash scripts/test_pipeline_demo.sh`。它会调用 `pipe-demo`，用 shell 断言检查 pipeline 行为；这里的 shell 断言主要指 `grep` 这类命令：例如检查输出中必须包含 `llvm.func @inference`，fusion 后不能再出现 `batch_norm_inference`，JIT 输出必须包含 `JIT result` 和 `1.5`。成功时大致输出：
+`test_shell_regression` 等价于 `bash scripts/test_shell_regression.sh`。它会调用 `pipe-demo`，用 shell 断言检查 pipeline 行为；这里的 shell 断言主要指 `grep` 这类命令：例如检查输出中必须包含 `llvm.func @inference`，fusion 后不能再出现 `batch_norm_inference`，JIT 输出必须包含 `JIT result` 和 `1.5`。成功时大致输出：
 
 ```text
 == matmul_add: full pipeline ==

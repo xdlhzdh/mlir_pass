@@ -37,7 +37,7 @@
 ## Task 5: Driver + tests ✅
 
 - [x] `test/mini_model.mlir`, `conv_bn_relu.mlir`, `matmul_add.mlir`
-- [x] `scripts/test_pipeline_demo.sh`
+- [x] `scripts/test_shell_regression.sh`
 - [x] JIT on `matmul_add.mlir`
 
 ## Task 6: Documentation ✅
@@ -76,9 +76,9 @@ Spec §Custom pass summary; each stage has at least one custom pass beyond upstr
 ```bash
 cmake -B build -G Ninja -DCMAKE_PREFIX_PATH=/usr/local -DSTABLEHLO_LIB_DIR=/usr/local/lib
 ninja -C build
-ninja -C build test_pipeline_demo              # Pipeline regression (= bash scripts/test_pipeline_demo.sh)
+ninja -C build test_shell_regression              # Shell regression (= bash scripts/test_shell_regression.sh)
 ninja -C build test_lit_filecheck             # LIT only (= bash scripts/test_lit_filecheck.sh)
-ninja -C build test_all                       # Pipeline regression + LIT (= bash scripts/test_all.sh)
+ninja -C build test_all                       # Shell regression + LIT (= bash scripts/test_all.sh)
 ninja -C build run_pipeline_demo             # optional IR dumps(= bash scripts/run_pipeline_demo.sh)
 ```
 

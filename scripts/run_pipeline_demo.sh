@@ -70,4 +70,4 @@ echo "  mini_model/after-loops.mlir      — scf/cf loops"
 echo "  mini_model/after-llvm-final.mlir — LLVM dialect"
 echo "  */00-full-pipeline-with-pass-dumps.txt — pass-by-pass trace (--dump-ir)"
 echo
-echo "Regression: bash scripts/test_pipeline_demo.sh"
+echo "Shell regression: bash scripts/test_shell_regression.sh"
