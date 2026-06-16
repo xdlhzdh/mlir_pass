@@ -6,7 +6,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DEMO="${PIPE_DEMO:-${ROOT}/build/tools/ai-compiler-demo/pipe-demo}"
 OUT="${ROOT}/output/pipeline-dumps/latest"
-VECTORIZE_FLAG=(--no-vectorize)
+VECTORIZE_FLAG=(--loop-mode=scf-seq)
 
 if [[ ! -x "${DEMO}" ]]; then
   echo "error: build first: cmake -B build -G Ninja -DCMAKE_PREFIX_PATH=/usr/local && ninja -C build" >&2

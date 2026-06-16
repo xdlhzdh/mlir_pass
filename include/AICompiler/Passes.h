@@ -14,6 +14,8 @@ std::unique_ptr<Pass> createCustomLinalgOptPass();
 std::unique_ptr<Pass> createCustomBufferOptPass();
 std::unique_ptr<Pass> createCustomLinalgToParallelLoopsPass();
 std::unique_ptr<Pass> createCustomLoopTilingPass();
+std::unique_ptr<Pass> createCustomAffineOptPass();
+std::unique_ptr<Pass> createCustomVectorOptPass();
 std::unique_ptr<Pass> createCustomLLVMCleanupPass();
 
 } // namespace aicom

@@ -3,6 +3,7 @@
 #include "AICompiler/Passes.h"
 
 #include "mlir/Dialect/Arith/IR/Arith.h"
+#include "mlir/Dialect/Affine/IR/AffineOps.h"
 #include "mlir/Dialect/Bufferization/IR/Bufferization.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/Linalg/IR/Linalg.h"
@@ -10,6 +11,7 @@
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/Dialect/SCF/IR/SCF.h"
 #include "mlir/Dialect/Tensor/IR/Tensor.h"
+#include "mlir/Dialect/Vector/IR/VectorOps.h"
 #include "mlir/ExecutionEngine/CRunnerUtils.h"
 #include "mlir/ExecutionEngine/ExecutionEngine.h"
 #include "mlir/Conversion/ConvertToLLVM/ToLLVMPass.h"
@@ -35,7 +37,13 @@ using namespace mlir::aicom;
 
 static bool isKnownPipelineStage(llvm::StringRef name) {
   return name == "fusion" || name == "linalg" || name == "bufferize" ||
-         name == "loops" || name == "llvm" || name == "all";
+         name == "loops" || name == "affine" || name == "vector" ||
+         name == "llvm" || name == "all";
+}
+
+static bool isKnownLoopMode(llvm::StringRef name) {
+  return name == "scf-seq" || name == "scf-par" || name == "affine" ||
+         name == "vector";
 }
 
 static llvm::cl::opt<std::string> inputFilename(
@@ -50,7 +58,13 @@ static llvm::cl::opt<bool> jitRun("jit",
 
 static llvm::cl::opt<bool> noVectorize(
     "no-vectorize",
-    llvm::cl::desc("Use sequential linalg-to-loops instead of parallel"));
+    llvm::cl::desc("Deprecated: use --loop-mode=scf-seq instead"));
+
+static llvm::cl::opt<std::string> loopMode(
+    "loop-mode",
+    llvm::cl::desc(
+        "Loop lowering path: scf-seq, scf-par (default), affine, vector"),
+    llvm::cl::init("scf-par"));
 
 static llvm::cl::opt<std::string> entryFunc(
     "entry-func", llvm::cl::init("inference"),
@@ -59,8 +73,38 @@ static llvm::cl::opt<std::string> entryFunc(
 static llvm::cl::opt<std::string> stopAfterStage(
     "pipeline-stop-after",
     llvm::cl::desc(
-        "Stop after pipeline stage: fusion, linalg, bufferize, loops, llvm, all"),
+        "Stop after pipeline stage: fusion, linalg, bufferize, loops, "
+        "affine, vector, llvm, all"),
     llvm::cl::init("all"));
+
+static LogicalResult parsePipelineOptions(PipelineOptions &opts) {
+  opts.dumpIrBetweenStages = dumpIr;
+
+  llvm::StringRef modeName = loopMode.getValue();
+  if (noVectorize.getNumOccurrences() > 0) {
+    if (loopMode.getNumOccurrences() > 0) {
+      llvm::errs() << "error: do not combine --no-vectorize with --loop-mode\n";
+      return failure();
+    }
+    llvm::errs() << "warning: --no-vectorize is deprecated; use "
+                    "--loop-mode=scf-seq\n";
+    modeName = "scf-seq";
+  }
+
+  if (!isKnownLoopMode(modeName)) {
+    llvm::errs() << "Unknown --loop-mode: " << modeName << "\n";
+    return failure();
+  }
+  opts.loopMode = parseLoopMode(modeName);
+
+  if (!isKnownPipelineStage(stopAfterStage)) {
+    llvm::errs() << "Unknown --pipeline-stop-after stage: "
+                 << stopAfterStage.getValue() << "\n";
+    return failure();
+  }
+  opts.stopAfter = parsePipelineStage(stopAfterStage);
+  return validatePipelineOptions(opts.stopAfter, opts.loopMode);
+}
 
 static void printMemRefF32(int64_t rank, void *data, int64_t offset,
                            int64_t *sizes) {
@@ -152,15 +196,8 @@ static LogicalResult runJit(ModuleOp module, StringRef funcName) {
   int64_t numElements = ranked.getNumElements();
 
   PipelineOptions opts;
-  opts.enableVectorize = !noVectorize;
-  opts.dumpIrBetweenStages = dumpIr;
-  if (!isKnownPipelineStage(stopAfterStage)) {
-    llvm::errs() << "Unknown --pipeline-stop-after stage: "
-                 << stopAfterStage.getValue()
-                 << "\n";
+  if (failed(parsePipelineOptions(opts)))
     return failure();
-  }
-  opts.stopAfter = parsePipelineStage(stopAfterStage);
   if (failed(runAICompilerPipeline(module, opts)))
     return failure();
 
@@ -244,15 +281,8 @@ int main(int argc, char **argv) {
   }
 
   PipelineOptions opts;
-  opts.enableVectorize = !noVectorize;
-  opts.dumpIrBetweenStages = dumpIr;
-  if (!isKnownPipelineStage(stopAfterStage)) {
-    llvm::errs() << "Unknown --pipeline-stop-after stage: "
-                 << stopAfterStage.getValue()
-                 << "\n";
+  if (failed(parsePipelineOptions(opts)))
     return 1;
-  }
-  opts.stopAfter = parsePipelineStage(stopAfterStage);
   if (failed(runAICompilerPipeline(*module, opts))) {
     llvm::errs() << "Pipeline failed\n";
     return 1;

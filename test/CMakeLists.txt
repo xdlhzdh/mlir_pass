@@ -21,6 +21,10 @@ if(FILECHECK_EXE AND LIT_EXE)
   configure_file(lit/lit.site.cfg.py.in "${_lit_dir}/lit.site.cfg.py" @ONLY)
   file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/lit/conv_bn_fusion.mlir"
        DESTINATION "${_lit_dir}")
+  file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/lit/affine_lowering.mlir"
+       DESTINATION "${_lit_dir}")
+  file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/lit/vector_lowering.mlir"
+       DESTINATION "${_lit_dir}")
 
   add_custom_target(test_lit_filecheck
     COMMAND ${CMAKE_COMMAND} -E env "LIT_EXE=${LIT_EXE}" "FILECHECK_EXE=${FILECHECK_EXE}"

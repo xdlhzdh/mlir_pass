@@ -8,5 +8,7 @@ void registerAICompilerPasses() {
   ::mlir::registerPass(
       [] { return mlir::aicom::createCustomLinalgToParallelLoopsPass(); });
   ::mlir::registerPass([] { return mlir::aicom::createCustomLoopTilingPass(); });
+  ::mlir::registerPass([] { return mlir::aicom::createCustomAffineOptPass(); });
+  ::mlir::registerPass([] { return mlir::aicom::createCustomVectorOptPass(); });
   ::mlir::registerPass([] { return mlir::aicom::createCustomLLVMCleanupPass(); });
 }

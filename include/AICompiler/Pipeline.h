@@ -10,7 +10,7 @@ namespace mlir {
 namespace aicom {
 
 struct PipelineOptions {
-  bool enableVectorize = true;
+  LoopMode loopMode = LoopMode::ScfPar;
   bool dumpIrBetweenStages = false;
   /// Run through this stage (inclusive). `All` runs the full pipeline.
   PipelineStage stopAfter = PipelineStage::All;
@@ -18,7 +18,8 @@ struct PipelineOptions {
 
 void buildAICompilerPipeline(OpPassManager &pm, const PipelineOptions &options);
 
-LogicalResult runAICompilerPipeline(ModuleOp module, const PipelineOptions &options);
+LogicalResult runAICompilerPipeline(ModuleOp module,
+                                    const PipelineOptions &options);
 
 } // namespace aicom
 } // namespace mlir

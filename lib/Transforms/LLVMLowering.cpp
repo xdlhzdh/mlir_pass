@@ -8,15 +8,16 @@
 namespace mlir {
 namespace aicom {
 
-void buildLLVMLoweringStage(OpPassManager &pm) {
+void buildLLVMLoweringStage(OpPassManager &pm, LoopMode loopMode) {
   pm.addPass(createArithToLLVMConversionPass());
   pm.addPass(createConvertControlFlowToLLVMPass());
   pm.addPass(createConvertFuncToLLVMPass());
   pm.addPass(createConvertIndexToLLVMPass());
   pm.addPass(createConvertMathToLLVMPass());
+  if (loopMode == LoopMode::Vector)
+    pm.addPass(createConvertVectorToLLVMPass());
   pm.addPass(createFinalizeMemRefToLLVMConversionPass());
   pm.addPass(createReconcileUnrealizedCastsPass());
-  // Custom teaching pass (see CustomLLVMCleanup.cpp, Passes.td: custom-llvm-cleanup).
   pm.addPass(createCustomLLVMCleanupPass());
 }
 

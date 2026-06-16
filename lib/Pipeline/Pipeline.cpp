@@ -41,6 +41,36 @@ LogicalResult runOneStage(ModuleOp module, const PipelineOptions &options,
   return success();
 }
 
+void buildLoopModeStage(OpPassManager &pm, const PipelineOptions &options) {
+  switch (options.loopMode) {
+  case LoopMode::ScfSeq:
+    buildLowerToLoopsStage(pm);
+    break;
+  case LoopMode::ScfPar:
+    buildVectorizationStage(pm);
+    break;
+  case LoopMode::Affine:
+    buildAffineStage(pm, options.stopAfter == PipelineStage::Affine);
+    break;
+  case LoopMode::Vector:
+    buildVectorDialectStage(pm, options.stopAfter == PipelineStage::Vector);
+    break;
+  }
+}
+
+PipelineStage loopModeStage(LoopMode mode) {
+  switch (mode) {
+  case LoopMode::ScfSeq:
+  case LoopMode::ScfPar:
+    return PipelineStage::Loops;
+  case LoopMode::Affine:
+    return PipelineStage::Affine;
+  case LoopMode::Vector:
+    return PipelineStage::Vector;
+  }
+  return PipelineStage::Loops;
+}
+
 } // namespace
 
 void buildAICompilerPipeline(OpPassManager &pm, const PipelineOptions &options) {
@@ -52,18 +82,25 @@ void buildAICompilerPipeline(OpPassManager &pm, const PipelineOptions &options) 
   }
   if (runThroughStage(PipelineStage::Bufferize, options.stopAfter))
     buildBufferizationStage(pm);
-  if (runThroughStage(PipelineStage::Loops, options.stopAfter)) {
-    if (options.enableVectorize)
-      buildVectorizationStage(pm);
-    else
-      buildLowerToLoopsStage(pm);
-  }
+
+  PipelineStage modeStage = loopModeStage(options.loopMode);
+  if (runThroughStage(modeStage, options.stopAfter))
+    buildLoopModeStage(pm, options);
+
   if (runThroughStage(PipelineStage::LLVM, options.stopAfter))
-    buildLLVMLoweringStage(pm);
+    buildLLVMLoweringStage(pm, options.loopMode);
 }
 
 LogicalResult runAICompilerPipeline(ModuleOp module,
                                     const PipelineOptions &options) {
+  if (failed(validatePipelineOptions(options.stopAfter, options.loopMode))) {
+    llvm::errs() << "Invalid --pipeline-stop-after="
+                 << pipelineStageName(options.stopAfter)
+                 << " for --loop-mode=" << loopModeName(options.loopMode)
+                 << "\n";
+    return failure();
+  }
+
   auto runIf = [&](PipelineStage stage, llvm::StringRef label,
                    llvm::function_ref<void(OpPassManager &)> build) {
     if (!runThroughStage(stage, options.stopAfter))
@@ -85,16 +122,16 @@ LogicalResult runAICompilerPipeline(ModuleOp module,
                    [](OpPassManager &pm) { buildBufferizationStage(pm); })))
     return failure();
 
-  if (failed(runIf(PipelineStage::Loops, "loops", [&](OpPassManager &pm) {
-        if (options.enableVectorize)
-          buildVectorizationStage(pm);
-        else
-          buildLowerToLoopsStage(pm);
+  PipelineStage modeStage = loopModeStage(options.loopMode);
+  llvm::StringRef modeLabel = pipelineStageName(modeStage);
+  if (failed(runIf(modeStage, modeLabel, [&](OpPassManager &pm) {
+        buildLoopModeStage(pm, options);
       })))
     return failure();
 
-  if (failed(runIf(PipelineStage::LLVM, "llvm",
-                   [](OpPassManager &pm) { buildLLVMLoweringStage(pm); })))
+  if (failed(runIf(PipelineStage::LLVM, "llvm", [&](OpPassManager &pm) {
+        buildLLVMLoweringStage(pm, options.loopMode);
+      })))
     return failure();
 
   return success();

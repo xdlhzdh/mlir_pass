@@ -8,11 +8,15 @@ add_library(AICompilerTransforms STATIC
   CustomBufferOpt.cpp
   CustomLinalgToParallelLoops.cpp
   CustomLoopTiling.cpp
+  CustomAffineOpt.cpp
+  CustomVectorOpt.cpp
   CustomLLVMCleanup.cpp
   StableHLOToLinalg.cpp
   LinalgOptimization.cpp
   Bufferization.cpp
   LowerToLoops.cpp
+  LowerToAffine.cpp
+  LowerToVectorDialect.cpp
   Vectorization.cpp
   LLVMLowering.cpp
   RegisterPasses.cpp
@@ -42,6 +46,10 @@ target_link_libraries(AICompilerTransforms PUBLIC
   MLIRSupport
   MLIRTransforms
   MLIRArithToLLVM
+  MLIRAffineDialect
+  MLIRAffineToStandard
+  MLIRAffineTransforms
+  MLIRAffineUtils
   MLIRControlFlowToLLVM
   MLIRFuncToLLVM
   MLIRIndexToLLVM
@@ -49,6 +57,8 @@ target_link_libraries(AICompilerTransforms PUBLIC
   MLIRMemRefToLLVM
   MLIRBufferizationToMemRef
   MLIRLinalgToStandard
+  MLIRVectorDialect
+  MLIRVectorToLLVM
   MLIRReconcileUnrealizedCasts
 )
 

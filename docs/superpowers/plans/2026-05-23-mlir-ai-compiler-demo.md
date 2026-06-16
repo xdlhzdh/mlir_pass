@@ -86,5 +86,15 @@ ninja -C build run_pipeline_demo             # optional IR dumps(= bash scripts/
 
 ## Explicitly not in plan (see spec non-goals)
 
-- Affine pipeline (`convert-linalg-to-affine-loops`, `lower-affine`)
-- Vector dialect pass (`linalg-vectorize`, `convert-vector-to-llvm`) — documented in spec as production reference; parallel SCF path used instead for teaching
+- Polyhedral scheduling, target-specific SIMD codegen
+
+## Task 10: Affine & Vector lowering paths ✅
+
+Spec: `docs/superpowers/specs/2026-06-16-affine-vector-lowering-design.md`
+
+- [x] `--loop-mode=scf-seq|scf-par|affine|vector` (replaces `--no-vectorize` as primary CLI)
+- [x] `buildAffineStage` + `custom-affine-opt`
+- [x] `buildVectorDialectStage` + `custom-vector-opt` + `convert-vector-to-llvm`
+- [x] `--pipeline-stop-after=affine|vector`
+- [x] Shell regression + LIT tests
+- [x] README + spec sync

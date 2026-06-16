@@ -71,6 +71,31 @@ def CustomLoopTiling : Pass<"custom-loop-tiling", "func::FuncOp"> {
   ];
 }
 
+def CustomAffineOpt : Pass<"custom-affine-opt", "func::FuncOp"> {
+  let summary = "Strip-mine outermost affine.for loops with constant bounds";
+  let description = [{
+    Custom teaching pass: finds outermost `affine.for` loops with constant
+    bounds and trip count greater than the tile size, then applies
+    `tilePerfectlyNested` strip-mining (tile size 4). Skips loops with
+    `iter_args` (reductions).
+  }];
+  let constructor = "mlir::aicom::createCustomAffineOptPass()";
+  let dependentDialects = ["affine::AffineDialect"];
+}
+
+def CustomVectorOpt : Pass<"custom-vector-opt", "func::FuncOp"> {
+  let summary = "Lower static vector.transfer ops to vector.load/store";
+  let description = [{
+    Custom teaching pass: for `vector.transfer_read/write` with minor-identity
+    maps and statically-shaped memrefs, replace with `vector.load/store`.
+  }];
+  let constructor = "mlir::aicom::createCustomVectorOptPass()";
+  let dependentDialects = [
+    "vector::VectorDialect",
+    "memref::MemRefDialect",
+  ];
+}
+
 def CustomLLVMCleanup : Pass<"custom-llvm-cleanup", "ModuleOp"> {
   let summary = "LLVM dialect dead store elimination and dead op removal";
   let description = [{

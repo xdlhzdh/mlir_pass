@@ -63,9 +63,11 @@ mlir_pass/
 | 2 | `linalg` | `stablehlo-legalize-to-linalg`, canonicalize, cse, linalg fusion/fold | `custom-linalg-opt` |
 | 3 | `bufferize` | one-shot-bufferize, buffer-deallocation pipeline | `custom-buffer-opt` |
 | 4 | `loops` | `convert-bufferization-to-memref`, linalg→loops **or** parallel loops, `convert-scf-to-cf` | `custom-loop-tiling` (seq.) **or** `custom-linalg-to-parallel-loops` (par.) |
+| 4b | `affine` | `convert-linalg-to-affine-loops`, `lower-affine`, `convert-scf-to-cf` | `custom-affine-opt` |
+| 4c | `vector` | `convert-linalg-to-affine-loops`, `affine-super-vectorize`, `lower-affine`, `convert-scf-to-cf`, `convert-vector-to-llvm` | `custom-vector-opt` |
 | 5 | `llvm` | arith/cf/func/index/math/memref → LLVM, reconcile casts | `custom-llvm-cleanup` |
 
-**Stage 4 CLI:** `--no-vectorize` selects sequential `scf.for` path; default selects parallel `scf.parallel` path. The flag name is historical — neither path uses the **vector dialect**.
+**Stage 4 CLI:** `--loop-mode=scf-seq|scf-par|affine|vector` (default `scf-par`). `--no-vectorize` is a deprecated alias for `scf-seq`.
 
 ## Dialect lowering: this repo vs production paths
 
@@ -73,13 +75,13 @@ mlir_pass/
 
 ```
 StableHLO → Linalg (tensor) → bufferize → Linalg (memref)
-  → SCF (scf.for or scf.parallel)
+  → [scf-seq | scf-par | affine | vector]  (--loop-mode)
   → CF  (convert-scf-to-cf)
-  → LLVM Dialect (convert-*-to-llvm, finalize-memref-to-llvm)
+  → LLVM Dialect (convert-*-to-llvm, optional convert-vector-to-llvm, finalize-memref-to-llvm)
   → JIT (ExecutionEngine)
 ```
 
-**Not used:** Affine dialect, Vector dialect.
+See also: `docs/superpowers/specs/2026-06-16-affine-vector-lowering-design.md`.
 
 ### Production reference — Affine → LLVM (e.g. polyhedral / affine loop nests)
 
@@ -125,8 +127,8 @@ The sibling repo [`mlir_compiler/src/mlir/gpu/`](../../../../mlir_compiler/src/m
 | P5 | `7_stablehlo_opt/` | `shlo_graph.h` | Graph opts, simplified conv+BN | — | Absorbed into Stage 2 official cleanup + Stage 1 fusion |
 | P6 | `8_linalg_opt/` | `linalg_ir.h` | Dep analysis, linalg fusion, tiling metadata | `linalg` | Official linalg passes + `custom-linalg-opt` |
 | P7 | `9_bufferize/` | `bufferize_ir.h` | OSB: alias, in-place, copies, dealloc | `bufferize` | Official bufferize + `custom-buffer-opt` |
-| P8 | `10_scf_affine/` | `scf_affine_ir.h` | Loop nest, tiling, interchange, fusion, vec prep | `loops` (partial) | `convert-linalg-to-loops`, `custom-loop-tiling`, `scf-to-cf`; **no affine dialect** |
-| P8 | `11_vector/` | `vector_ir.h` | vector.transfer, fma, contract, mask, LLVM intrinsics | — (non-goal) | Documented production path; `custom-linalg-to-parallel-loops` for loop parallelism only |
+| P8 | `10_scf_affine/` | `scf_affine_ir.h` | Loop nest, tiling, interchange, fusion, vec prep | `loops` / `affine` | `convert-linalg-to-loops`, `custom-loop-tiling`, `convert-linalg-to-affine-loops`, `custom-affine-opt`, `scf-to-cf` |
+| P8 | `11_vector/` | `vector_ir.h` | vector.transfer, fma, contract, mask, LLVM intrinsics | `vector` | `affine-super-vectorize`, `custom-vector-opt`, `convert-vector-to-llvm` |
 | P9 | `12_llvm_lowering/` | `llvm_lowering_ir.h` | Simulated Vector→LLVM, ISel, regalloc, asm | `llvm` | Real `convert-*-to-llvm`, `custom-llvm-cleanup`, JIT |
 
 **Reading order:** Stage 6 ↔ `mlir_pass` fusion → gpu 8–9 ↔ `mlir_pass` linalg/bufferize → gpu 10–12 concepts ↔ `mlir_pass` loops/llvm + production Affine/Vector paths in this spec §Dialect lowering.
@@ -137,6 +139,10 @@ For a **full real `mlir-opt` command chain** (including optional vector), see [`
 
 ## Why no custom Vector dialect pass in this repo
 
+**Superseded (2026-06-16):** Affine and Vector paths are now implemented. See `2026-06-16-affine-vector-lowering-design.md`.
+
+Historical rationale (SCF-only era):
+
 | Reason | Detail |
 |--------|--------|
 | **Teaching scope** | Demo targets the **main trunk** StableHLO→Linalg→memref→SCF→CF→LLVM; Vector is an **optional L4 branch** for SIMD. |
@@ -145,7 +151,7 @@ For a **full real `mlir-opt` command chain** (including optional vector), see [`
 | **Duplication** | Production path already uses upstream `linalg-vectorize` + `convert-vector-to-llvm`; a thin wrapper adds little teaching value vs. existing custom SCF passes. |
 | **Parallel alternative** | `custom-linalg-to-parallel-loops` teaches **loop-level parallelism** without SIMD ABI complexity. |
 
-**Future extension (out of scope):** optional Stage 4b with official `-linalg-vectorize` + `-convert-vector-to-llvm` behind a flag, documented against the reference path above.
+**Future extension:** target-specific SIMD width selection and reduction vectorization.
 
 ## Conv+BN fusion (custom)
 
@@ -165,6 +171,8 @@ For `batch_norm_inference(conv(x, w), γ, β, μ, σ)` with constant tensors:
 | `custom-buffer-opt` | bufferize | `CustomBufferOpt.cpp` |
 | `custom-loop-tiling` | loops (seq.) | `CustomLoopTiling.cpp` |
 | `custom-linalg-to-parallel-loops` | loops (par.) | `CustomLinalgToParallelLoops.cpp` |
+| `custom-affine-opt` | affine | `CustomAffineOpt.cpp` |
+| `custom-vector-opt` | vector | `CustomVectorOpt.cpp` |
 | `custom-llvm-cleanup` | llvm | `CustomLLVMCleanup.cpp` |
 
 ## Workloads
@@ -178,9 +186,10 @@ For `batch_norm_inference(conv(x, w), γ, β, μ, σ)` with constant tensors:
 ```
 --input=<file>                Required StableHLO .mlir
 --dump-ir                     Print IR after each stage (and each pass when enabled)
---pipeline-stop-after=STAGE   fusion | linalg | bufferize | loops | llvm | all
+--pipeline-stop-after=STAGE   fusion | linalg | bufferize | loops | affine | vector | llvm | all
+--loop-mode=MODE              scf-seq | scf-par | affine | vector (default: scf-par)
 --jit                         JIT nullary @inference
---no-vectorize                Sequential scf.for loops (NOT “disable vector dialect”)
+--no-vectorize                Deprecated alias for --loop-mode=scf-seq
 --entry-func=NAME             Default: inference
 ```
 
@@ -198,14 +207,14 @@ LIT/FileCheck require `lit` and `FileCheck` at cmake configure time. See `README
 ## Non-goals
 
 - ONNX import, GPU codegen, mlir-opt plugin, ResNet-scale models
-- **Affine dialect pipeline** in this repo (documented as production reference only)
-- **Vector dialect / custom vector pass** (documented as production reference only; see above)
 - Polyhedral scheduling, target-specific SIMD codegen
+- JIT on vector path (IR-level verification only for vector mode)
 
 ## Document map
 
 | Document | Role |
 |----------|------|
 | This spec | **What** the system is, dialect paths, custom passes, non-goals |
+| `specs/2026-06-16-affine-vector-lowering-design.md` | Affine/Vector path design |
 | `plans/2026-05-23-mlir-ai-compiler-demo.md` | **How** it was built (tasks, verify commands) |
 | `README.md` | **Runbook** — build, test, visualize, toolchain |

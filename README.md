@@ -1,10 +1,10 @@
 # MLIR AI Compiler Pipeline Demo
 
-将 StableHLO 子图（Conv + BN + ReLU + MatMul + Add）经 **Linalg → Bufferize → Loops → LLVM** 降至 LLVM Dialect 的 C++ 演示工程：官方 MLIR Pass + **6 个自定义 teaching pass**，支持 JIT、分阶段 IR 导出与回归测试。
+将 StableHLO 子图（Conv + BN + ReLU + MatMul + Add）经 **Linalg → Bufferize → Loops/Affine/Vector → LLVM** 降至 LLVM Dialect 的 C++ 演示工程：官方 MLIR Pass + **8 个自定义 teaching pass**，支持 JIT、分阶段 IR 导出与回归测试。
 
 - 概念对齐：[`mlir_compiler`](../mlir_compiler/src/mlir/README.md) P5–P9  
 - 环境安装：[`mlir_compiler` cpu README](../mlir_compiler/src/mlir/cpu/README.md) §1.2–§1.5  
-- 设计细节：[相关文档](#相关文档)
+- 设计细节：[相关文档](#%E7%9B%B8%E5%85%B3%E6%96%87%E6%A1%A3)
 
 ---
 
@@ -67,7 +67,7 @@ ninja -C build
 | 配置 | `cmake -B build -G Ninja -DCMAKE_PREFIX_PATH=/usr/local -DSTABLEHLO_LIB_DIR=/usr/local/lib` | — | 生成构建目录；检测 lit/FileCheck；生成 `compile_commands.json` |
 | 编译全部 | — | `ninja -C build` | 编译静态库与 `pipe-demo` |
 | 编译驱动 | — | `ninja -C build pipe-demo` | 只构建驱动程序及其依赖 |
-| 运行 pipeline | `./build/tools/ai-compiler-demo/pipe-demo --input=test/mini_model.mlir --no-vectorize` | — | 直接运行完整 pipeline |
+| 运行 pipeline | `./build/tools/ai-compiler-demo/pipe-demo --input=test/mini_model.mlir --loop-mode=scf-seq` | — | 直接运行完整 pipeline |
 | Shell regression | `bash scripts/test_shell_regression.sh` | `ninja -C build test_shell_regression` | 用 Bash + `grep` 断言 pipeline、fusion、stop-after、JIT 正确 |
 | LIT/FileCheck | `bash scripts/test_lit_filecheck.sh` | `ninja -C build test_lit_filecheck` | 只执行 `test/lit/*.mlir` 的 FileCheck 用例 |
 | 全量测试 | `bash scripts/test_all.sh` | `ninja -C build test_all` | 先 Shell regression，再 LIT/FileCheck |
@@ -79,7 +79,7 @@ ninja -C build
 cmake -B build -G Ninja -DCMAKE_PREFIX_PATH=/usr/local -DSTABLEHLO_LIB_DIR=/usr/local/lib
 ninja -C build
 ninja -C build test_shell_regression
-./build/tools/ai-compiler-demo/pipe-demo --input=test/mini_model.mlir --no-vectorize
+./build/tools/ai-compiler-demo/pipe-demo --input=test/mini_model.mlir --loop-mode=scf-seq
 ```
 
 完整验证与演示工作流：
@@ -109,21 +109,29 @@ bash scripts/run_pipeline_demo.sh
 ### 示例
 
 ```bash
-# 完整 pipeline（推荐加 --no-vectorize）
+# 完整 pipeline（顺序 SCF 路径）
 ./build/tools/ai-compiler-demo/pipe-demo \
-  --input=test/mini_model.mlir --no-vectorize
+  --input=test/mini_model.mlir --loop-mode=scf-seq
+
+# Affine 路径
+./build/tools/ai-compiler-demo/pipe-demo \
+  --input=test/matmul_add.mlir --loop-mode=affine
+
+# Vector dialect 路径
+./build/tools/ai-compiler-demo/pipe-demo \
+  --input=test/matmul_add.mlir --loop-mode=vector
 
 # 打印每个 pass 后的 IR
 ./build/tools/ai-compiler-demo/pipe-demo \
-  --input=test/conv_bn_relu.mlir --dump-ir --no-vectorize 2>&1 | less
+  --input=test/conv_bn_relu.mlir --dump-ir --loop-mode=scf-seq 2>&1 | less
 
 # 在指定 stage 停止
 ./build/tools/ai-compiler-demo/pipe-demo \
-  --input=test/mini_model.mlir --pipeline-stop-after=bufferize --no-vectorize
+  --input=test/mini_model.mlir --pipeline-stop-after=bufferize --loop-mode=scf-seq
 
 # JIT（matmul_add，检查数值）
 ./build/tools/ai-compiler-demo/pipe-demo \
-  --input=test/matmul_add.mlir --jit --no-vectorize
+  --input=test/matmul_add.mlir --jit --loop-mode=scf-seq
 ```
 
 ### CLI 参数
@@ -132,9 +140,10 @@ bash scripts/run_pipeline_demo.sh
 |------|------|
 | `--input=<file>` | StableHLO `.mlir`（必填） |
 | `--dump-ir` | 阶段间 + pass 间 IR 输出到 stderr |
-| `--pipeline-stop-after=` | `fusion` \| `linalg` \| `bufferize` \| `loops` \| `llvm` \| `all` |
+| `--pipeline-stop-after=` | `fusion` \| `linalg` \| `bufferize` \| `loops` \| `affine` \| `vector` \| `llvm` \| `all` |
+| `--loop-mode=` | `scf-seq` \| `scf-par`（默认） \| `affine` \| `vector` |
 | `--jit` | JIT 执行 `--entry-func` |
-| `--no-vectorize` | loops 用顺序 `scf.for`（非 Vector 方言；见 [Lowering 路径摘要](#lowering-路径摘要)） |
+| `--no-vectorize` | **已弃用**，等价 `--loop-mode=scf-seq` |
 | `--entry-func=` | JIT 入口（默认 `inference`） |
 
 ### 示例输入
@@ -158,8 +167,10 @@ bash scripts/run_pipeline_demo.sh
 | 1 fusion | `--pipeline-stop-after=fusion` | StableHLO 图优化，Conv+BN 融合后仍是 StableHLO | `conv-bn-fusion` |
 | 2 linalg | `--pipeline-stop-after=linalg` | StableHLO tensor ops → Linalg tensor ops | `custom-linalg-opt` |
 | 3 bufferize | `--pipeline-stop-after=bufferize` | tensor → memref，插入 buffer 管理 | `custom-buffer-opt` |
-| 4 loops | `--pipeline-stop-after=loops` | Linalg/memref → SCF，再降到 CF | `custom-loop-tiling` 或 `custom-linalg-to-parallel-loops` |
-| 5 llvm | `--pipeline-stop-after=llvm` | arith/cf/func/memref 等 → LLVM Dialect | `custom-llvm-cleanup` |
+| 4 loops | `--pipeline-stop-after=loops` | Linalg/memref → SCF → CF（`scf-seq` / `scf-par`） | `custom-loop-tiling` 或 `custom-linalg-to-parallel-loops` |
+| 4b affine | `--pipeline-stop-after=affine` | Linalg/memref → Affine（`--loop-mode=affine`） | `custom-affine-opt` |
+| 4c vector | `--pipeline-stop-after=vector` | Linalg → Affine → Vector dialect（`--loop-mode=vector`） | `custom-vector-opt` |
+| 5 llvm | `--pipeline-stop-after=llvm` | arith/cf/func/memref/vector → LLVM Dialect | `custom-llvm-cleanup` |
 
 ### 自定义 Pass
 
@@ -168,8 +179,10 @@ bash scripts/run_pipeline_demo.sh
 | `conv-bn-fusion` | fusion | `lib/Transforms/ConvBNFusion.cpp` | 用 rewrite pattern 将 BN 折叠进 Conv 权重和 bias |
 | `custom-linalg-opt` | linalg | `lib/Transforms/CustomLinalgOpt.cpp` | 对常量输入的 elementwise `linalg.generic` 做编译期折叠 |
 | `custom-buffer-opt` | bufferize | `lib/Transforms/CustomBufferOpt.cpp` | 将小的 `memref.alloc` 提升为 `alloca`，但跳过 return buffer |
-| `custom-loop-tiling` | loops / `--no-vectorize` | `lib/Transforms/CustomLoopTiling.cpp` | 对 `scf.for` 做 strip-mining，跳过带 `iter_args` 的循环 |
-| `custom-linalg-to-parallel-loops` | loops / 默认 | `lib/Transforms/CustomLinalgToParallelLoops.cpp` | 将 elementwise `generic` 和 2D `matmul` 自定义 lowering 到 `scf.parallel` |
+| `custom-loop-tiling` | loops / `scf-seq` | `lib/Transforms/CustomLoopTiling.cpp` | 对 `scf.for` 做 strip-mining，跳过带 `iter_args` 的循环 |
+| `custom-linalg-to-parallel-loops` | loops / `scf-par` | `lib/Transforms/CustomLinalgToParallelLoops.cpp` | 将 elementwise `generic` 和 2D `matmul` 自定义 lowering 到 `scf.parallel` |
+| `custom-affine-opt` | affine | `lib/Transforms/CustomAffineOpt.cpp` | 对最外层 `affine.for` 做 strip-mining（`tilePerfectlyNested`） |
+| `custom-vector-opt` | vector | `lib/Transforms/CustomVectorOpt.cpp` | 静态 shape 的 `vector.transfer_*` → `vector.load/store` |
 | `custom-llvm-cleanup` | llvm | `lib/Transforms/CustomLLVMCleanup.cpp` | 在 LLVM dialect 上做死 store / 死 op 清理 |
 
 这些 pass 注册在 `include/AICompiler/Passes.td` 和 `lib/Transforms/RegisterPasses.cpp`。表中的名字是 MLIR pass 注册名，会出现在 `--help` 和 `--dump-ir` 相关输出中；`pipe-demo` 运行的是固定 pipeline，不把它们作为 `--custom-linalg-opt` 这样的单独 CLI 参数开放。
@@ -179,25 +192,27 @@ bash scripts/run_pipeline_demo.sh
 ./build/tools/ai-compiler-demo/pipe-demo --help 2>&1 | grep -E 'conv-bn|custom-'
 ```
 
-### Loops Stage 的两条路径
+### Loop 路径（`--loop-mode`）
 
-`--no-vectorize` 是历史命名：它只是在本 demo 中选择顺序循环路径，并不表示本仓库实现了 Vector 方言。
+四条路径互斥，默认 `scf-par`：
 
-| 运行方式 | loops stage 行为 | 会经过的自定义 pass |
-|----------|------------------|---------------------|
-| 默认，不加 `--no-vectorize` | Linalg/memref → `scf.parallel` → CF | `custom-linalg-to-parallel-loops` |
-| 加 `--no-vectorize` | Linalg/memref → `scf.for` → loop tiling → CF | `custom-loop-tiling` |
+| `--loop-mode` | 行为 | 自定义 pass |
+|---------------|------|-------------|
+| `scf-seq` | Linalg/memref → `scf.for` → CF | `custom-loop-tiling` |
+| `scf-par` | Linalg/memref → `scf.parallel` → CF | `custom-linalg-to-parallel-loops` |
+| `affine` | Linalg/memref → `affine.for` → SCF → CF | `custom-affine-opt` |
+| `vector` | Linalg → Affine → `vector.*` → SCF → CF | `custom-vector-opt` |
 
 ```bash
-# 观察顺序 loops 路径
+# 观察 Affine IR
 ./build/tools/ai-compiler-demo/pipe-demo \
   --input=test/matmul_add.mlir \
-  --pipeline-stop-after=loops --no-vectorize
+  --loop-mode=affine --pipeline-stop-after=affine
 
-# 观察并行 loops 路径
+# 观察 Vector dialect IR
 ./build/tools/ai-compiler-demo/pipe-demo \
   --input=test/matmul_add.mlir \
-  --pipeline-stop-after=loops
+  --loop-mode=vector --pipeline-stop-after=vector
 ```
 
 ### Pass 顺序
@@ -206,30 +221,38 @@ bash scripts/run_pipeline_demo.sh
 |-------|-----------|
 | fusion | `conv-bn-fusion` |
 | linalg | `stablehlo-legalize-to-linalg` → `canonicalize` / `cse` → `linalg-fuse-elementwise-ops` → `linalg-fold-unit-extent-dims` → `custom-linalg-opt` → `canonicalize` / `cse` |
-| bufferize | `one-shot-bufferize` → buffer deallocation pipeline → `custom-buffer-opt` → `canonicalize` / `cse` |
-| loops / `--no-vectorize` | `convert-bufferization-to-memref` → `convert-linalg-to-loops` → `custom-loop-tiling` → `convert-scf-to-cf` |
-| loops / 默认 | `convert-bufferization-to-memref` → `custom-linalg-to-parallel-loops` → `convert-scf-to-cf` |
-| llvm | arith/cf/func/index/math/memref lowering → `reconcile-unrealized-casts` → `custom-llvm-cleanup` |
+| bufferize | `one-shot-bufferize` → `buffer-deallocation-pipeline` → `custom-buffer-opt` → `canonicalize` / `cse` |
+| loops / `scf-seq` | `convert-bufferization-to-memref` → `convert-linalg-to-loops` → `custom-loop-tiling` → `convert-scf-to-cf` |
+| loops / `scf-par` | `convert-bufferization-to-memref` → `custom-linalg-to-parallel-loops` → `convert-scf-to-cf` |
+| affine | `convert-bufferization-to-memref` → `convert-linalg-to-affine-loops` → `custom-affine-opt` → [`lower-affine` → `convert-scf-to-cf`] |
+| vector | `convert-bufferization-to-memref` → `convert-linalg-to-affine-loops` → `affine-super-vectorize` → `custom-vector-opt` → [`lower-affine` → `convert-scf-to-cf`] |
+| llvm | arith/cf/func/index/math lowering → [`convert-vector-to-llvm` if vector path] → `finalize-memref-to-llvm` → `reconcile-unrealized-casts` → `custom-llvm-cleanup` |
 
 本仓库没有提供单独的 `mlir-opt` pass plugin target；如果要像上游 MLIR 那样手写 pass pipeline，需要另行封装插件或使用 MLIR pass pipeline 工具链。
 
 ### Lowering 路径摘要
 
-本仓库实际实现的路径：
+本仓库实现的 lowering 路径：
 
 ```text
-StableHLO → Linalg → bufferize(memref) → SCF → CF → LLVM Dialect → JIT
+StableHLO → Linalg → bufferize(memref)
+  → scf-seq / scf-par / affine / vector  (四选一，--loop-mode)
+  → CF → LLVM Dialect → JIT
 ```
 
-本仓库没有实现 Affine / Vector 方言 IR。实际生产场景中，Affine 通常走 `linalg → affine → lower-affine → SCF → CF → LLVM`，需要经过 SCF/CF；Vector 数据算子通常由 `convert-vector-to-llvm` 直接转 LLVM dialect，不经过 CF，但控制流循环仍会走 SCF → CF → LLVM。
+| 路径 | IR 轨迹 |
+|------|---------|
+| `scf-seq` / `scf-par` | memref Linalg → SCF → CF → LLVM |
+| `affine` | memref Linalg → Affine → SCF → CF → LLVM |
+| `vector` | memref Linalg → Affine → Vector dialect → SCF → CF → LLVM (+ `convert-vector-to-llvm`) |
 
-详见 [设计规格](docs/superpowers/specs/2026-05-23-mlir-ai-compiler-demo-design.md)。
+详见 [设计规格](./docs/superpowers/specs/2026-06-16-affine-vector-lowering-design.md) 与 [原 spec](./docs/superpowers/specs/2026-05-23-mlir-ai-compiler-demo-design.md)。
 
 ---
 
 ## 验证与 IR 落盘
 
-两者均调用 `pipe-demo`，**互不调用**。完整命令见 [命令速查](#命令速查)。
+两者均调用 `pipe-demo`，**互不调用**。完整命令见 [命令速查](#%E5%91%BD%E4%BB%A4%E9%80%9F%E6%9F%A5)。
 
 | | Shell regression `scripts/test_shell_regression.sh` | Demo `scripts/run_pipeline_demo.sh` |
 |--|-------------------------------------------------------------|--------------------------------------|
@@ -286,8 +309,8 @@ output/pipeline-dumps/latest/
 | `7_stablehlo_opt/` | — | 图优化概念并入 stage 2 |
 | `8_linalg_opt/` | linalg | + `custom-linalg-opt` |
 | `9_bufferize/` | bufferize | + `custom-buffer-opt` |
-| `10_scf_affine/` | loops（部分） | SCF + tiling，无 affine 方言 |
-| `11_vector/` | — | 未实现 |
+| `10_scf_affine/` | loops / affine | SCF + Affine + tiling |
+| `11_vector/` | vector | Vector dialect + `convert-vector-to-llvm` |
 | `12_llvm_lowering/` | llvm | 真实 LLVM + JIT |
 
 [`mlir_compiler` gpu](../mlir_compiler/src/mlir/gpu/) 为 header-only 教学 IR；本仓库为真实 `PassManager`。CPU `mlir-opt` 命令链见 [cpu README §2.5](../mlir_compiler/src/mlir/cpu/README.md)。
@@ -296,5 +319,6 @@ output/pipeline-dumps/latest/
 
 ## 相关文档
 
-- [设计规格](docs/superpowers/specs/2026-05-23-mlir-ai-compiler-demo-design.md)
-- [实现计划](docs/superpowers/plans/2026-05-23-mlir-ai-compiler-demo.md)
+- [Affine/Vector lowering 设计](./docs/superpowers/specs/2026-06-16-affine-vector-lowering-design.md)
+- [设计规格](./docs/superpowers/specs/2026-05-23-mlir-ai-compiler-demo-design.md)
+- [实现计划](./docs/superpowers/plans/2026-05-23-mlir-ai-compiler-demo.md)
