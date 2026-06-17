@@ -48,7 +48,7 @@ static bool isKnownLoopMode(llvm::StringRef name) {
 
 static llvm::cl::opt<std::string> inputFilename(
     "input", llvm::cl::desc("Input StableHLO .mlir file"),
-    llvm::cl::value_desc("filename"), llvm::cl::Required);
+    llvm::cl::value_desc("filename"));
 
 static llvm::cl::opt<bool> dumpIr("dump-ir",
                                   llvm::cl::desc("Print IR after each pass"));
@@ -65,6 +65,10 @@ static llvm::cl::opt<std::string> loopMode(
     llvm::cl::desc(
         "Loop lowering path: scf-seq, scf-par (default), affine, vector"),
     llvm::cl::init("scf-par"));
+
+static llvm::cl::opt<bool> listPasses(
+    "list-passes",
+    llvm::cl::desc("Print registered custom teaching pass names and exit"));
 
 static llvm::cl::opt<std::string> entryFunc(
     "entry-func", llvm::cl::init("inference"),
@@ -248,6 +252,16 @@ int main(int argc, char **argv) {
   registerAICompilerPasses();
 
   llvm::cl::ParseCommandLineOptions(argc, argv, "MLIR AI compiler pipeline demo\n");
+
+  if (listPasses) {
+    printAICompilerPassList(llvm::outs());
+    return 0;
+  }
+
+  if (inputFilename.getValue().empty()) {
+    llvm::errs() << "error: --input=<file> is required\n";
+    return 1;
+  }
 
   DialectRegistry registry;
   registerAllDialects(registry);

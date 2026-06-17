@@ -2,6 +2,7 @@
 #define AICOMPILER_PASSES_H
 
 #include "mlir/Pass/Pass.h"
+#include "llvm/Support/raw_ostream.h"
 
 namespace mlir {
 namespace aicom {
@@ -17,6 +18,8 @@ std::unique_ptr<Pass> createCustomLoopTilingPass();
 std::unique_ptr<Pass> createCustomAffineOptPass();
 std::unique_ptr<Pass> createCustomVectorOptPass();
 std::unique_ptr<Pass> createCustomLLVMCleanupPass();
+
+void printAICompilerPassList(llvm::raw_ostream &os);
 
 } // namespace aicom
 } // namespace mlir

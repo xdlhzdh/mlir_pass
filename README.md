@@ -142,6 +142,7 @@ bash scripts/run_pipeline_demo.sh
 | `--dump-ir` | 阶段间 + pass 间 IR 输出到 stderr |
 | `--pipeline-stop-after=` | `fusion` \| `linalg` \| `bufferize` \| `loops` \| `affine` \| `vector` \| `llvm` \| `all` |
 | `--loop-mode=` | `scf-seq` \| `scf-par`（默认） \| `affine` \| `vector` |
+| `--list-passes` | 打印 `--loop-mode` 路径与自定义 teaching pass 的对应关系并退出 |
 | `--jit` | JIT 执行 `--entry-func` |
 | `--no-vectorize` | **已弃用**，等价 `--loop-mode=scf-seq` |
 | `--entry-func=` | JIT 入口（默认 `inference`） |
@@ -188,9 +189,13 @@ bash scripts/run_pipeline_demo.sh
 这些 pass 注册在 `include/AICompiler/Passes.td` 和 `lib/Transforms/RegisterPasses.cpp`。表中的名字是 MLIR pass 注册名，会出现在 `--help` 和 `--dump-ir` 相关输出中；`pipe-demo` 运行的是固定 pipeline，不把它们作为 `--custom-linalg-opt` 这样的单独 CLI 参数开放。
 
 ```bash
-# 查看本仓库注册的自定义 pass 名
-./build/tools/ai-compiler-demo/pipe-demo --help 2>&1 | grep -E 'conv-bn|custom-'
+# 查看 loop-mode 路径与自定义 pass 对应关系
+./build/tools/ai-compiler-demo/pipe-demo --list-passes
+# 仅列出 pass 注册名：
+./build/tools/ai-compiler-demo/pipe-demo --list-passes | grep -E 'conv-bn|custom-'
 ```
+
+`pipe-demo` 是固定 pipeline 驱动，自定义 pass 不会出现在 `--help` 里（与 `mlir-opt` 不同）；请用 `--list-passes`。`scf-seq` / `scf-par` 是 `--loop-mode` 路径名，不是 pass 名，在 `--list-passes` 的 **loop-mode paths** 段中查看。
 
 ### Loop 路径（`--loop-mode`）
 
