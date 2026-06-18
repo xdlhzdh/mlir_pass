@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 # Shell regression for pipe-demo.
+#
+# Progress lines use: == <scenario>: <input.mlir> [<flags>] → <expectation> ==
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -10,27 +12,31 @@ if [[ ! -x "${DEMO}" ]]; then
   exit 1
 fi
 
-echo "== matmul_add: full pipeline (scf-seq) =="
+echo "== full pipeline → LLVM: matmul_add.mlir (loop-mode=scf-seq) =="
 out="$("${DEMO}" --input="${ROOT}/test/matmul_add.mlir" --loop-mode=scf-seq 2>&1)"
 grep -q 'llvm.func @inference' <<<"${out}"
 
-echo "== conv_bn_relu: full pipeline (scf-seq) =="
+echo "== full pipeline → LLVM: matmul_add.mlir (loop-mode=scf-par, default) =="
+out_par="$("${DEMO}" --input="${ROOT}/test/matmul_add.mlir" --loop-mode=scf-par 2>&1)"
+grep -q 'llvm.func @inference' <<<"${out_par}"
+
+echo "== full pipeline → LLVM: conv_bn_relu.mlir (loop-mode=scf-seq) =="
 out_conv="$("${DEMO}" --input="${ROOT}/test/conv_bn_relu.mlir" --loop-mode=scf-seq 2>&1)"
 grep -q 'llvm.func @inference' <<<"${out_conv}"
 
-echo "== mini_model: full pipeline (scf-seq) =="
+echo "== full pipeline → LLVM: mini_model.mlir (loop-mode=scf-seq) =="
 out_mini="$("${DEMO}" --input="${ROOT}/test/mini_model.mlir" --loop-mode=scf-seq 2>&1)"
 grep -q 'llvm.func @inference' <<<"${out_mini}"
 
-echo "== matmul_add: full pipeline (affine) =="
+echo "== full pipeline → LLVM: matmul_add.mlir (loop-mode=affine) =="
 out_affine="$("${DEMO}" --input="${ROOT}/test/matmul_add.mlir" --loop-mode=affine 2>&1)"
 grep -q 'llvm.func @inference' <<<"${out_affine}"
 
-echo "== matmul_add: full pipeline (vector) =="
+echo "== full pipeline → LLVM: matmul_add.mlir (loop-mode=vector) =="
 out_vector="$("${DEMO}" --input="${ROOT}/test/matmul_add.mlir" --loop-mode=vector 2>&1)"
 grep -q 'llvm.func @inference' <<<"${out_vector}"
 
-echo "== conv_bn_relu: fusion removes batch_norm =="
+echo "== fusion stage: conv_bn_relu.mlir (--dump-ir) → no batch_norm_inference =="
 dump="$("${DEMO}" --input="${ROOT}/test/conv_bn_relu.mlir" --dump-ir 2>&1)"
 fusion_block="$(sed -n '/IR Dump After Stage: fusion/,/IR Dump After Stage:/p' <<<"${dump}")"
 if grep -q batch_norm_inference <<<"${fusion_block}"; then
@@ -38,7 +44,7 @@ if grep -q batch_norm_inference <<<"${fusion_block}"; then
   exit 1
 fi
 
-echo "== stop-after fusion =="
+echo "== stop-after=fusion: mini_model.mlir → StableHLO (stablehlo.convolution), no LLVM =="
 stop_out="$("${DEMO}" --input="${ROOT}/test/mini_model.mlir" --pipeline-stop-after=fusion 2>&1)"
 grep -q 'stablehlo.convolution' <<<"${stop_out}"
 grep -qv 'llvm.func @inference' <<<"${stop_out}" || {
@@ -46,7 +52,7 @@ grep -qv 'llvm.func @inference' <<<"${stop_out}" || {
   exit 1
 }
 
-echo "== stop-after affine =="
+echo "== stop-after=affine: matmul_add.mlir (loop-mode=affine --dump-ir) → affine.for, no LLVM =="
 affine_dump="$("${DEMO}" --input="${ROOT}/test/matmul_add.mlir" --loop-mode=affine \
   --pipeline-stop-after=affine --dump-ir 2>&1)"
 grep -q 'affine.for' <<<"${affine_dump}"
@@ -55,7 +61,7 @@ grep -qv 'llvm.func @inference' <<<"${affine_dump}" || {
   exit 1
 }
 
-echo "== stop-after vector =="
+echo "== stop-after=vector: matmul_add.mlir (loop-mode=vector --dump-ir) → vector ops, no LLVM =="
 vector_dump="$("${DEMO}" --input="${ROOT}/test/matmul_add.mlir" --loop-mode=vector \
   --pipeline-stop-after=vector --dump-ir 2>&1)"
 grep -q 'vector\.' <<<"${vector_dump}"
@@ -64,12 +70,12 @@ grep -qv 'llvm.func @inference' <<<"${vector_dump}" || {
   exit 1
 }
 
-echo "== matmul_add: JIT (scf-seq) =="
+echo "== JIT smoke: matmul_add.mlir (--jit --loop-mode=scf-seq) → JIT result contains 1.5 =="
 jit_out="$("${DEMO}" --input="${ROOT}/test/matmul_add.mlir" --jit --loop-mode=scf-seq 2>&1)"
 grep -q 'JIT result' <<<"${jit_out}"
 grep -q '1.5' <<<"${jit_out}"
 
-echo "== deprecated --no-vectorize alias =="
+echo "== compat: matmul_add.mlir (--no-vectorize) → LLVM (alias of loop-mode=scf-seq) =="
 legacy_out="$("${DEMO}" --input="${ROOT}/test/matmul_add.mlir" --no-vectorize 2>&1)"
 grep -q 'llvm.func @inference' <<<"${legacy_out}"
 

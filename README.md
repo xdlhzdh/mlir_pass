@@ -145,7 +145,143 @@ bash scripts/run_pipeline_demo.sh
 | `--list-passes` | 打印 `--loop-mode` 路径与自定义 teaching pass 的对应关系并退出 |
 | `--jit` | JIT 执行 `--entry-func` |
 | `--no-vectorize` | **已弃用**，等价 `--loop-mode=scf-seq` |
-| `--entry-func=` | JIT 入口（默认 `inference`） |
+| `--entry-func=` | JIT 要调用的函数名（默认 `inference`，见下文） |
+
+### 关键 CLI 行为
+
+#### `--pipeline-stop-after`：pipeline 跑多远
+
+**默认：** 不写时等价于 `all`，即跑完整条 pipeline 直到 LLVM。
+
+控制 pipeline **执行到哪个 stage 就停**（包含该 stage）。每个 stage 使用独立 `PassManager`（见 `lib/Pipeline/Pipeline.cpp`）。
+
+| 取值 | 会执行到 | 典型最终 IR |
+|------|----------|-------------|
+| `fusion` | 仅 fusion | StableHLO（Conv+BN 已融合） |
+| `linalg` | fusion + linalg | Linalg tensor |
+| `bufferize` | … + bufferize | memref + buffer 管理 |
+| `loops` | … + loops | SCF/CF（需 `--loop-mode=scf-seq` 或 `scf-par`） |
+| `affine` | … + affine | `affine.for` 等（需 `--loop-mode=affine`） |
+| `vector` | … + vector | `vector.*` 等（需 `--loop-mode=vector`） |
+| `llvm` / `all` | 完整 pipeline | LLVM Dialect |
+
+`stop-after` 必须与 `--loop-mode` 匹配（例如 `--loop-mode=affine` 时不能用 `stop-after=loops`），否则会报错退出。
+
+```bash
+# 只到 bufferize：仍是 memref IR，不到 LLVM
+pipe-demo --input=test/matmul_add.mlir --loop-mode=scf-seq --pipeline-stop-after=bufferize
+
+# 默认 all：一路降到 LLVM
+pipe-demo --input=test/matmul_add.mlir --loop-mode=scf-seq
+```
+
+#### `--dump-ir`：输出什么、打到哪里
+
+**默认：** 不加时，pipeline 结束后把**最终 IR 打印到 stdout**（一份干净的 MLIR）。
+
+加了 `--dump-ir` 会额外做两件事（均输出到 **stderr**）：
+
+1. **每个 pass 之后**打印 IR（`PassManager::enableIRPrinting`）
+2. **每个 stage 结束之后**打印带 banner 的快照（`// -----// IR Dump After Stage: … //----- //`）
+
+因此加 `--dump-ir` 时，**不再**把最终 module 打到 stdout，避免与 trace 混在一起。教学/调试时建议 `2>&1 | less` 或 `2> trace.txt`。
+
+| | 不加 `--dump-ir` | 加 `--dump-ir` |
+|--|------------------|----------------|
+| pass 级 IR | 无 | stderr，每个 pass 后 |
+| stage 级 IR | 无 | stderr，每个 stage 后 |
+| 最终 IR | **stdout** | 不输出到 stdout |
+| 典型用途 | 保存/查看最终 IR | 观察 pass 顺序与 IR 变化 |
+
+```bash
+# 只要最终 LLVM IR（stdout）
+pipe-demo --input=test/matmul_add.mlir --loop-mode=scf-seq > after-llvm.mlir
+
+# 观察每个 pass 怎么变（stderr）
+pipe-demo --input=test/matmul_add.mlir --dump-ir --loop-mode=scf-seq 2>&1 | less
+```
+
+#### `--jit` 与 `--entry-func`：编译并执行
+
+**默认：** 不加 `--jit` 时只跑 pipeline 并输出 IR（或配合 `--dump-ir` 打 trace）。
+
+加了 `--jit` 时：
+
+1. 先跑 pipeline（同样受 `--loop-mode`、`--pipeline-stop-after` 约束；**要能 JIT 通常需要跑到 LLVM**）
+2. 用 `ExecutionEngine` 将 module JIT 为原生代码
+3. 调用 `--entry-func` 指定的函数（默认见下）
+4. 将**数值结果**打印到 stdout：`JIT result (N elements): …`
+
+**`--entry-func` 默认 `inference` 的含义：** 本仓库所有测试 `.mlir` 都把「整张图的入口」命名为 `@inference`——这是推理场景里常见的函数名约定（模型 forward / 推理入口），**不是** MLIR 关键字。`pipe-demo` 在 JIT 时会 `lookupSymbol<func::FuncOp>("inference")` 并调用它。
+
+当前测试文件中的入口均为 `@inference`：
+
+| 文件 | `@inference` 签名 |
+|------|-------------------|
+| `test/matmul_add.mlir` | `() -> tensor<2x2xf32>` |
+| `test/mini_model.mlir` | `() -> tensor<1x2xf32>` |
+| `test/conv_bn_relu.mlir` | `() -> tensor<1x2x2x2xf32>` |
+
+JIT demo 的限制（`tools/ai-compiler-demo/main.cpp`）：
+
+- 入口函数必须**无参数**（常量已嵌在 IR 里，便于教学）
+- 返回值必须是 **f32 ranked tensor**，rank ≤ 4
+
+**为何 `matmul_add.mlir` JIT 输出是 `1.5, 2.5, 3.5, 4.5`？**
+
+`test/matmul_add.mlir` 计算的是 **MatMul + Add**，常量如下：
+
+```mlir
+%a   = [[1, 2], [3, 4]]     // 2×2
+%b   = [[1, 0], [0, 1]]     // 单位阵
+%bias = [[0.5, 0.5], [0.5, 0.5]]
+%out = dot_general(%a, %b) + %bias
+```
+
+手算：`%a × I = %a`，再加 bias 得：
+
+```text
+[[1+0.5, 2+0.5], [3+0.5, 4+0.5]] = [[1.5, 2.5], [3.5, 4.5]]
+```
+
+按行优先展平为 4 个元素，JIT 输出为：
+
+```text
+JIT result (4 elements): 1.500000e+00, 2.500000e+00, 3.500000e+00, 4.500000e+00
+```
+
+Shell regression 里用 `grep 1.5` 只检查**至少出现** `1.5`（第一个元素正确），并**不是**断言四个元素全是 `1.5`。
+
+| | 不加 `--jit` | 加 `--jit` |
+|--|--------------|-----------|
+| 目的 | 看/保存 IR | 验证数值是否正确 |
+| 输出 | MLIR（stdout 或 stderr trace） | `JIT result: …`（stdout） |
+| 典型输入 | `mini_model.mlir` 等 | `matmul_add.mlir` |
+
+```bash
+# 只看 IR
+pipe-demo --input=test/matmul_add.mlir --loop-mode=scf-seq
+
+# 跑通并核对数值
+pipe-demo --input=test/matmul_add.mlir --jit --loop-mode=scf-seq
+
+# 指定其他入口名（仅当 .mlir 里定义了对应 func 时有效）
+pipe-demo --input=test/matmul_add.mlir --jit --entry-func=inference
+```
+
+#### 三者组合示例
+
+```bash
+# 教学：bufferize 之后、每个 pass 的 IR 变化
+pipe-demo --input=test/matmul_add.mlir \
+  --loop-mode=affine --pipeline-stop-after=bufferize --dump-ir 2>&1 | less
+
+# 落盘：最终 LLVM IR
+pipe-demo --input=test/matmul_add.mlir --loop-mode=scf-seq > after-llvm.mlir
+
+# 验证：全 pipeline + JIT 数值
+pipe-demo --input=test/matmul_add.mlir --jit --loop-mode=scf-seq
+```
 
 ### 示例输入
 
@@ -267,25 +403,47 @@ StableHLO → Linalg → bufferize(memref)
 
 ### Shell regression
 
-`test_shell_regression` 等价于 `bash scripts/test_shell_regression.sh`。它会调用 `pipe-demo`，用 shell 断言检查 pipeline 行为；这里的 shell 断言主要指 `grep` 这类命令：例如检查输出中必须包含 `llvm.func @inference`，fusion 后不能再出现 `batch_norm_inference`，JIT 输出必须包含 `JIT result` 和 `1.5`。成功时大致输出：
+`test_shell_regression` 等价于 `bash scripts/test_shell_regression.sh`（或 `ninja -C build test_shell_regression`）。脚本依次调用 `pipe-demo`，用 `grep` / `sed` 做**粗粒度**断言：只检查输出里是否出现（或不应出现）某些字符串，**不**逐元素比对 JIT 浮点结果。全部通过时退出码为 0，终端大致输出：
 
 ```text
-== matmul_add: full pipeline ==
-== conv_bn_relu: full pipeline ==
-== mini_model: full pipeline ==
-== conv_bn_relu: fusion removes batch_norm ==
-== stop-after fusion ==
-== matmul_add: JIT ==
+== full pipeline → LLVM: matmul_add.mlir (loop-mode=scf-seq) ==
+== full pipeline → LLVM: matmul_add.mlir (loop-mode=scf-par, default) ==
+== full pipeline → LLVM: conv_bn_relu.mlir (loop-mode=scf-seq) ==
+== full pipeline → LLVM: mini_model.mlir (loop-mode=scf-seq) ==
+== full pipeline → LLVM: matmul_add.mlir (loop-mode=affine) ==
+== full pipeline → LLVM: matmul_add.mlir (loop-mode=vector) ==
+== fusion stage: conv_bn_relu.mlir (--dump-ir) → no batch_norm_inference ==
+== stop-after=fusion: mini_model.mlir → StableHLO (stablehlo.convolution), no LLVM ==
+== stop-after=affine: matmul_add.mlir (loop-mode=affine --dump-ir) → affine.for, no LLVM ==
+== stop-after=vector: matmul_add.mlir (loop-mode=vector --dump-ir) → vector ops, no LLVM ==
+== JIT smoke: matmul_add.mlir (--jit --loop-mode=scf-seq) → JIT result contains 1.5 ==
+== compat: matmul_add.mlir (--no-vectorize) → LLVM (alias of loop-mode=scf-seq) ==
 Shell regression passed.
 All requested tests passed.
 ```
 
-| 检查项 | 说明 |
-|--------|------|
-| 全 pipeline | 三份 `.mlir` 输出含 `llvm.func @inference` |
-| Fusion | fusion 阶段无 `batch_norm_inference` |
-| stop-after | `fusion` 阶段不到 LLVM |
-| JIT | `matmul_add` 输出 `JIT result` 与 `1.5` |
+脚本里每行 `echo` 的格式为 **`== <场景>: <输入文件> [<参数>] → <期望> ==`**，与下表「进度行」列一致。
+
+| # | 进度行（脚本 echo） | 命令要点 | 断言（通过条件） |
+|---|---------------------|----------|------------------|
+| 1 | `full pipeline → LLVM: matmul_add.mlir (loop-mode=scf-seq)` | `matmul_add.mlir`，`--loop-mode=scf-seq` | 输出含 `llvm.func @inference` |
+| 2 | `full pipeline → LLVM: matmul_add.mlir (loop-mode=scf-par, default)` | `matmul_add.mlir`，`--loop-mode=scf-par`（与不写 `--loop-mode` 的默认相同） | 同上（`custom-linalg-to-parallel-loops` 路径） |
+| 3 | `full pipeline → LLVM: conv_bn_relu.mlir (loop-mode=scf-seq)` | `conv_bn_relu.mlir`，`--loop-mode=scf-seq` | 同上 |
+| 4 | `full pipeline → LLVM: mini_model.mlir (loop-mode=scf-seq)` | `mini_model.mlir`，`--loop-mode=scf-seq` | 同上 |
+| 5 | `full pipeline → LLVM: matmul_add.mlir (loop-mode=affine)` | `matmul_add.mlir`，`--loop-mode=affine` | 同上（Affine 路径降到 LLVM） |
+| 6 | `full pipeline → LLVM: matmul_add.mlir (loop-mode=vector)` | `matmul_add.mlir`，`--loop-mode=vector` | 同上（Vector 路径降到 LLVM） |
+| 7 | `fusion stage: conv_bn_relu.mlir (--dump-ir) → no batch_norm_inference` | `conv_bn_relu.mlir`，`--dump-ir`；取 fusion stage IR 片段 | 该片段**不含** `batch_norm_inference` |
+| 8 | `stop-after=fusion: mini_model.mlir → StableHLO (stablehlo.convolution), no LLVM` | `mini_model.mlir`，`--pipeline-stop-after=fusion` | **含** `stablehlo.convolution`；**不含** `llvm.func @inference` |
+| 9 | `stop-after=affine: matmul_add.mlir (loop-mode=affine --dump-ir) → affine.for, no LLVM` | `matmul_add.mlir`，`--loop-mode=affine --pipeline-stop-after=affine --dump-ir` | **含** `affine.for`；**不含** `llvm.func @inference` |
+| 10 | `stop-after=vector: matmul_add.mlir (loop-mode=vector --dump-ir) → vector ops, no LLVM` | `matmul_add.mlir`，`--loop-mode=vector --pipeline-stop-after=vector --dump-ir` | **含** `vector.`；**不含** `llvm.func @inference` |
+| 11 | `JIT smoke: matmul_add.mlir (--jit --loop-mode=scf-seq) → JIT result contains 1.5` | `matmul_add.mlir`，`--jit --loop-mode=scf-seq` | **含** `JIT result` 与 `1.5`（smoke test；完整期望 `1.5, 2.5, 3.5, 4.5`，见上文 JIT 说明） |
+| 12 | `compat: matmul_add.mlir (--no-vectorize) → LLVM (alias of loop-mode=scf-seq)` | `matmul_add.mlir`，`--no-vectorize` | 含 `llvm.func @inference` |
+
+说明：
+
+- **「全 pipeline」** 行（#1–#6）只证明 IR 里出现了 `@inference` 的 LLVM Lowering 结果，不检查具体数值。其中 #2 覆盖默认 `scf-par` 路径（`custom-linalg-to-parallel-loops`）；`matmul_add` 另覆盖 `scf-seq` / `affine` / `vector`（#1、#5、#6）。
+- **JIT 行**（#11）的 `grep 1.5` 是**最小 smoke test**：`matmul_add` 手算结果为 `[[1.5,2.5],[3.5,4.5]]`，脚本只确认输出串里出现 `1.5`，并未断言四个元素全对。
+- 需要更细的 IR 检查请用 LIT/FileCheck（`test_lit_filecheck`）。
 
 ### LIT（可选）
 
