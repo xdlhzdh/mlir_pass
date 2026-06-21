@@ -7,10 +7,10 @@
 #include "mlir/Transforms/GreedyPatternRewriteDriver.h"
 
 namespace mlir {
-namespace aicom {
-
 #define GEN_PASS_DEF_CUSTOMVECTOROPT
 #include "Passes.h.inc"
+
+namespace aicom {
 
 namespace {
 

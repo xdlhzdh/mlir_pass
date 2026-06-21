@@ -1,1 +1,1 @@
-add_subdirectory(ai-compiler-demo)
+add_subdirectory(pipe-demo)

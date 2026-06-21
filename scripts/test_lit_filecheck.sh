@@ -48,7 +48,7 @@ fi
 if ! is_usable_tool "${lit_exe}" || ! is_usable_tool "${filecheck_exe}"; then
   echo "error: lit or FileCheck not found." >&2
   echo "  Install lit + FileCheck, re-run cmake, then retry." >&2
-  echo "  Example: sudo apt install llvm-21-tools && export PATH=/usr/lib/llvm-21/bin:\$PATH" >&2
+  echo "  Example: sudo apt install llvm-22-tools && export PATH=/usr/lib/llvm-22/bin:\$PATH" >&2
   exit 1
 fi
 

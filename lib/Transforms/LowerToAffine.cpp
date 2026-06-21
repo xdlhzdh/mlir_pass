@@ -3,6 +3,7 @@
 #include "AICompiler/Passes.h"
 
 #include "mlir/Conversion/Passes.h"
+#include "mlir/Dialect/Affine/Transforms/Passes.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/Linalg/Passes.h"
 #include "mlir/Pass/PassManager.h"

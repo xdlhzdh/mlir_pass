@@ -1,7 +1,4 @@
 #include "AICompiler/Pipeline.h"
-#include "AICompiler/Passes.h"
-
-#include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Pass/PassManager.h"
 
 namespace mlir {

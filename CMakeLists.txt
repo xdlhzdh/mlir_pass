@@ -1,4 +1,28 @@
 cmake_minimum_required(VERSION 3.20)
+
+# LLVM installs clang-cl into /usr/local/bin. On Linux/WSL it uses the MSVC
+# driver and cannot link; CMake may pick it when CMAKE_PREFIX_PATH=/usr/local.
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND NOT CMAKE_CXX_COMPILER)
+  find_program(_AICOMPILER_CXX c++ clang++
+    HINTS /usr/bin /usr/local/bin
+    NO_CMAKE_PATH NO_CMAKE_ENVIRONMENT_PATH)
+  if(_AICOMPILER_CXX AND NOT _AICOMPILER_CXX MATCHES "clang-cl$")
+    set(CMAKE_CXX_COMPILER "${_AICOMPILER_CXX}" CACHE STRING "C++ compiler")
+  endif()
+  unset(_AICOMPILER_CXX)
+endif()
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND NOT CMAKE_C_COMPILER AND CMAKE_CXX_COMPILER)
+  get_filename_component(_AICOMPILER_CXX_DIR "${CMAKE_CXX_COMPILER}" DIRECTORY)
+  find_program(_AICOMPILER_C cc clang
+    HINTS "${_AICOMPILER_CXX_DIR}" /usr/bin
+    NO_CMAKE_PATH NO_CMAKE_ENVIRONMENT_PATH)
+  if(_AICOMPILER_C AND NOT _AICOMPILER_C MATCHES "clang-cl$")
+    set(CMAKE_C_COMPILER "${_AICOMPILER_C}" CACHE STRING "C compiler")
+  endif()
+  unset(_AICOMPILER_C)
+  unset(_AICOMPILER_CXX_DIR)
+endif()
+
 project(AICompilerDemo LANGUAGES CXX C)
 
 # For clangd / IDE (compile_commands.json in build/).
@@ -42,7 +66,7 @@ add_subdirectory(test)
 # One-click pipeline demo: per-stage IR files under output/pipeline-dumps/latest/
 add_custom_target(
   run_pipeline_demo
-  COMMAND ${CMAKE_COMMAND} -E env PIPE_DEMO=${CMAKE_BINARY_DIR}/tools/ai-compiler-demo/pipe-demo
+  COMMAND ${CMAKE_COMMAND} -E env PIPE_DEMO=${CMAKE_BINARY_DIR}/tools/pipe-demo/pipe-demo
           bash ${CMAKE_SOURCE_DIR}/scripts/run_pipeline_demo.sh
   WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
   DEPENDS pipe-demo

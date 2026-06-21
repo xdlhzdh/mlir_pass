@@ -8,7 +8,6 @@
 #include "mlir/Transforms/GreedyPatternRewriteDriver.h"
 
 #include <algorithm>
-#include <cmath>
 
 namespace mlir {
 namespace aicom {

@@ -4,7 +4,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-DEMO="${PIPE_DEMO:-${ROOT}/build/tools/ai-compiler-demo/pipe-demo}"
+DEMO="${PIPE_DEMO:-${ROOT}/build/tools/pipe-demo/pipe-demo}"
 OUT="${ROOT}/output/pipeline-dumps/latest"
 VECTORIZE_FLAG=(--loop-mode=scf-seq)
 

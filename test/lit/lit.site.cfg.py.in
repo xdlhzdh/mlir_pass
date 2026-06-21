@@ -3,7 +3,7 @@ import os
 _lit_dir = os.path.dirname(os.path.abspath(__file__))
 _lit_source_dir = os.path.join("@CMAKE_CURRENT_SOURCE_DIR@", "lit")
 
-config.pipe_demo = "@CMAKE_BINARY_DIR@/tools/ai-compiler-demo/pipe-demo"
+config.pipe_demo = "@CMAKE_BINARY_DIR@/tools/pipe-demo/pipe-demo"
 config.matmul_add = os.path.join("@CMAKE_CURRENT_SOURCE_DIR@", "matmul_add.mlir")
 config.substitutions.append(("%pipe-demo", config.pipe_demo))
 config.substitutions.append(("%matmul_add", config.matmul_add))

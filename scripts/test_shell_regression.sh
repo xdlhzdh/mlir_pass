@@ -5,7 +5,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-DEMO="${ROOT}/build/tools/ai-compiler-demo/pipe-demo"
+DEMO="${ROOT}/build/tools/pipe-demo/pipe-demo"
 
 if [[ ! -x "${DEMO}" ]]; then
   echo "error: build pipe-demo first: ninja -C build" >&2

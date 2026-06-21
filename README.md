@@ -29,16 +29,16 @@ ls /usr/local/lib/cmake/mlir/MLIRConfig.cmake
 | 用途 | 典型路径 | 说明 |
 |------|----------|------|
 | 编译链接 MLIR | `/usr/local` | 源码 `cmake install`（`mlir_compiler` §1.3） |
-| LIT 工具 | `/usr/lib/llvm-21/bin` 等 | `apt install llvm-21-tools` 提供 `lit`、`FileCheck` |
+| LIT 工具 | `/usr/lib/llvm-22/bin` 等 | `apt install llvm-22-tools` 提供 `lit`、`FileCheck`（apt 暂无 `llvm-23-tools`） |
 
-`llvm-21-dev` 通常 **不含** 可链接的 `libMLIR*.a`，**不能** 用 `/usr/lib/llvm-21` 作为 `CMAKE_PREFIX_PATH`。`lit`/`FileCheck` 与 MLIR **无需同版本**。
+`llvm-*-dev` 通常 **不含** 可链接的 `libMLIR*.a`，**不能** 用 `/usr/lib/llvm-*` 作为 `CMAKE_PREFIX_PATH`。`lit`/`FileCheck` 与 `/usr/local` 里自编译的 MLIR **无需同版本**——它们只跑测试脚本和对 IR 文本做模式匹配。
 
-启用 LIT 示例：
+启用 LIT 时只需把工具加入 `PATH`（配置与编译见 [编译与构建](#编译与构建)）：
 
 ```bash
-sudo apt install llvm-21-tools
-export PATH="/usr/lib/llvm-21/bin:$PATH"
-cmake -B build -G Ninja -DCMAKE_PREFIX_PATH=/usr/local -DSTABLEHLO_LIB_DIR=/usr/local/lib
+# apt 上较新的是 llvm-22-tools；若已自编译 LLVM 23，也可用其 build/bin 下的 lit、FileCheck
+sudo apt install llvm-22-tools
+export PATH="/usr/lib/llvm-22/bin:$PATH"
 ```
 
 LIT 配置由两层组成：`test/lit/lit.cfg.py` 定义测试套件规则；CMake 生成的 `build/test/lit/lit.site.cfg.py` 注入构建目录中的 `pipe-demo` 路径，并把测试里的 `%pipe-demo` 替换成该路径。LIT 产物在 `build/test/lit/Output/`（勿提交）。
@@ -47,39 +47,45 @@ LIT 配置由两层组成：`test/lit/lit.cfg.py` 定义测试套件规则；CMa
 
 ## 编译与构建
 
+### 配置与编译
+
 ```bash
+export CC=gcc
+export CXX=g++
+
 cmake -B build -G Ninja \
   -DCMAKE_PREFIX_PATH=/usr/local \
   -DSTABLEHLO_LIB_DIR=/usr/local/lib
 ninja -C build
 ```
 
+> **WSL / Linux：** 若 `CMAKE_PREFIX_PATH=/usr/local` 且未指定编译器，CMake 可能误选 `/usr/local/bin/clang-cl`（MSVC 驱动，无法链接）。请显式指定 `CC/GCC/CMAKE_C_COMPILER/CMAKE_CXX_COMPILER`，或删除 `build/` 后重新配置（根 `CMakeLists.txt` 会尽量避开 `clang-cl`）。
+
 - `build/compile_commands.json`：IDE / clangd（`CMAKE_EXPORT_COMPILE_COMMANDS=ON`）
 - `-fno-rtti`：匹配 MLIR ABI（CMake 已设置）
-- CMake 目标：`test_shell_regression`（Shell regression）、`run_pipeline_demo`（IR 落盘）；若找到 lit/FileCheck，另有 `test_lit_filecheck`、`test_all`。
+- CMake 目标：`test_shell_regression`（Shell regression）、`run_pipeline_demo`（IR 落盘）；若找到 lit/FileCheck，另有 `test_lit_filecheck`、`test_all`
 
 ### 命令速查
 
-按自然执行顺序列出本工程常用命令。`test_shell_regression` 与 `test_lit_filecheck` 是 **不同** 的 Ninja target：前者跑 Shell regression，后者只跑 LIT/FileCheck。
+按自然执行顺序列出常用命令。`test_shell_regression` 与 `test_lit_filecheck` 是 **不同** 的 Ninja target：前者跑 Shell regression，后者只跑 LIT/FileCheck。
 
 | 阶段 | Bash / 可执行文件 | Ninja | 作用 |
 |------|-------------------|-------|------|
-| 配置 | `cmake -B build -G Ninja -DCMAKE_PREFIX_PATH=/usr/local -DSTABLEHLO_LIB_DIR=/usr/local/lib` | — | 生成构建目录；检测 lit/FileCheck；生成 `compile_commands.json` |
-| 编译全部 | — | `ninja -C build` | 编译静态库与 `pipe-demo` |
+| 配置与编译 | 见上方代码块 | `ninja -C build` | 生成 `build/`、编译静态库与 `pipe-demo` |
 | 编译驱动 | — | `ninja -C build pipe-demo` | 只构建驱动程序及其依赖 |
-| 运行 pipeline | `./build/tools/ai-compiler-demo/pipe-demo --input=test/mini_model.mlir --loop-mode=scf-seq` | — | 直接运行完整 pipeline |
+| 运行 pipeline | `./build/tools/pipe-demo/pipe-demo --input=test/mini_model.mlir --loop-mode=scf-seq` | — | 直接运行完整 pipeline |
 | Shell regression | `bash scripts/test_shell_regression.sh` | `ninja -C build test_shell_regression` | 用 Bash + `grep` 断言 pipeline、fusion、stop-after、JIT 正确 |
 | LIT/FileCheck | `bash scripts/test_lit_filecheck.sh` | `ninja -C build test_lit_filecheck` | 只执行 `test/lit/*.mlir` 的 FileCheck 用例 |
 | 全量测试 | `bash scripts/test_all.sh` | `ninja -C build test_all` | 先 Shell regression，再 LIT/FileCheck |
 | IR 落盘 Demo | `bash scripts/run_pipeline_demo.sh` | `ninja -C build run_pipeline_demo` | 生成各 stage IR 与 pass trace 到 `output/pipeline-dumps/latest/` |
 
-最小工作流：
+### 快速开始
+
+完成 [配置与编译](#配置与编译) 后：
 
 ```bash
-cmake -B build -G Ninja -DCMAKE_PREFIX_PATH=/usr/local -DSTABLEHLO_LIB_DIR=/usr/local/lib
-ninja -C build
 ninja -C build test_shell_regression
-./build/tools/ai-compiler-demo/pipe-demo --input=test/mini_model.mlir --loop-mode=scf-seq
+./build/tools/pipe-demo/pipe-demo --input=test/mini_model.mlir --loop-mode=scf-seq
 ```
 
 完整验证与演示工作流：
@@ -104,33 +110,33 @@ bash scripts/run_pipeline_demo.sh
 
 ## 运行 `pipe-demo`
 
-路径：`./build/tools/ai-compiler-demo/pipe-demo`
+路径：`./build/tools/pipe-demo/pipe-demo`
 
 ### 示例
 
 ```bash
 # 完整 pipeline（顺序 SCF 路径）
-./build/tools/ai-compiler-demo/pipe-demo \
+./build/tools/pipe-demo/pipe-demo \
   --input=test/mini_model.mlir --loop-mode=scf-seq
 
 # Affine 路径
-./build/tools/ai-compiler-demo/pipe-demo \
+./build/tools/pipe-demo/pipe-demo \
   --input=test/matmul_add.mlir --loop-mode=affine
 
 # Vector dialect 路径
-./build/tools/ai-compiler-demo/pipe-demo \
+./build/tools/pipe-demo/pipe-demo \
   --input=test/matmul_add.mlir --loop-mode=vector
 
 # 打印每个 pass 后的 IR
-./build/tools/ai-compiler-demo/pipe-demo \
+./build/tools/pipe-demo/pipe-demo \
   --input=test/conv_bn_relu.mlir --dump-ir --loop-mode=scf-seq 2>&1 | less
 
 # 在指定 stage 停止
-./build/tools/ai-compiler-demo/pipe-demo \
+./build/tools/pipe-demo/pipe-demo \
   --input=test/mini_model.mlir --pipeline-stop-after=bufferize --loop-mode=scf-seq
 
 # JIT（matmul_add，检查数值）
-./build/tools/ai-compiler-demo/pipe-demo \
+./build/tools/pipe-demo/pipe-demo \
   --input=test/matmul_add.mlir --jit --loop-mode=scf-seq
 ```
 
@@ -222,7 +228,7 @@ pipe-demo --input=test/matmul_add.mlir --dump-ir --loop-mode=scf-seq 2>&1 | less
 | `test/mini_model.mlir` | `() -> tensor<1x2xf32>` |
 | `test/conv_bn_relu.mlir` | `() -> tensor<1x2x2x2xf32>` |
 
-JIT demo 的限制（`tools/ai-compiler-demo/main.cpp`）：
+JIT demo 的限制（`tools/pipe-demo/main.cpp`）：
 
 - 入口函数必须**无参数**（常量已嵌在 IR 里，便于教学）
 - 返回值必须是 **f32 ranked tensor**，rank ≤ 4
@@ -326,9 +332,9 @@ pipe-demo --input=test/matmul_add.mlir --jit --loop-mode=scf-seq
 
 ```bash
 # 查看 loop-mode 路径与自定义 pass 对应关系
-./build/tools/ai-compiler-demo/pipe-demo --list-passes
+./build/tools/pipe-demo/pipe-demo --list-passes
 # 仅列出 pass 注册名：
-./build/tools/ai-compiler-demo/pipe-demo --list-passes | grep -E 'conv-bn|custom-'
+./build/tools/pipe-demo/pipe-demo --list-passes | grep -E 'conv-bn|custom-'
 ```
 
 `pipe-demo` 是固定 pipeline 驱动，自定义 pass 不会出现在 `--help` 里（与 `mlir-opt` 不同）；请用 `--list-passes`。`scf-seq` / `scf-par` 是 `--loop-mode` 路径名，不是 pass 名，在 `--list-passes` 的 **loop-mode paths** 段中查看。
@@ -346,12 +352,12 @@ pipe-demo --input=test/matmul_add.mlir --jit --loop-mode=scf-seq
 
 ```bash
 # 观察 Affine IR
-./build/tools/ai-compiler-demo/pipe-demo \
+./build/tools/pipe-demo/pipe-demo \
   --input=test/matmul_add.mlir \
   --loop-mode=affine --pipeline-stop-after=affine
 
 # 观察 Vector dialect IR
-./build/tools/ai-compiler-demo/pipe-demo \
+./build/tools/pipe-demo/pipe-demo \
   --input=test/matmul_add.mlir \
   --loop-mode=vector --pipeline-stop-after=vector
 ```

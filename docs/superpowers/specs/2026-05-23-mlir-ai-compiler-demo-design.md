@@ -17,7 +17,7 @@ Build a demo AI compiler pipeline in C++ using **official MLIR APIs** plus **per
 |-------|----------------|
 | `AICompilerTransforms` | Stage `build*Stage` wrappers + custom passes under `lib/Transforms/` |
 | `AICompilerPipeline` | Stage orchestration (`Pipeline.cpp`) |
-| `pipe-demo` | CLI driver (`tools/ai-compiler-demo/main.cpp`) |
+| `pipe-demo` | CLI driver (`tools/pipe-demo/main.cpp`) |
 
 ## Project layout
 
@@ -49,7 +49,7 @@ mlir_pass/
 │   │   └── RegisterPasses.cpp
 │   └── Pipeline/
 │       └── Pipeline.cpp
-├── tools/ai-compiler-demo/
+├── tools/pipe-demo/
 └── test/
     ├── mini_model.mlir, conv_bn_relu.mlir, matmul_add.mlir
     └── lit/                              # Optional FileCheck → test_lit_filecheck
