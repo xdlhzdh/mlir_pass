@@ -43,6 +43,19 @@ def SoftmaxLegalize : Pass<"softmax-legalize", "func::FuncOp"> {
   ];
 }
 
+def StablehloConstantFold : Pass<"stablehlo-constant-fold", "func::FuncOp"> {
+  let summary = "Fold constant StableHLO elementwise add/mul at compile time";
+  let description = [{
+    Custom teaching pass: when both operands of `stablehlo.add` or
+    `stablehlo.multiply` are compile-time constants, evaluate the op and
+    replace it with a single `stablehlo.constant`.
+  }];
+  let constructor = "mlir::aicom::createStablehloConstantFoldPass()";
+  let dependentDialects = [
+    "stablehlo::StablehloDialect",
+  ];
+}
+
 def CustomLinalgOpt : Pass<"custom-linalg-opt", "func::FuncOp"> {
   let summary = "Fold constant elementwise linalg.generic at compile time";
   let description = [{

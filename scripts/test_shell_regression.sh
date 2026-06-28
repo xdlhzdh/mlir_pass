@@ -56,6 +56,15 @@ softmax_out="$("${DEMO}" --input="${ROOT}/test/lit/softmax_legalize.mlir" \
   --pipeline-stop-after=fusion 2>&1)"
 grep -q 'aicom.softmax_canonicalized' <<<"${softmax_out}"
 
+echo "== fusion stage: constant_fold.mlir → add/mul folded to constant =="
+fold_out="$("${DEMO}" --input="${ROOT}/test/lit/constant_fold.mlir" \
+  --pipeline-stop-after=fusion 2>&1)"
+grep -q 'stablehlo.constant' <<<"${fold_out}"
+if grep -q 'stablehlo.add' <<<"${fold_out}" || grep -q 'stablehlo.multiply' <<<"${fold_out}"; then
+  echo "error: constant_fold.mlir should not retain stablehlo.add/multiply after fusion" >&2
+  exit 1
+fi
+
 echo "== stop-after=fusion: mini_model.mlir → StableHLO (stablehlo.convolution), no LLVM =="
 stop_out="$("${DEMO}" --input="${ROOT}/test/mini_model.mlir" --pipeline-stop-after=fusion 2>&1)"
 grep -q 'stablehlo.convolution' <<<"${stop_out}"

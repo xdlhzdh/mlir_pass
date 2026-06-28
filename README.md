@@ -1,6 +1,6 @@
 # MLIR AI Compiler Pipeline Demo
 
-将 StableHLO 子图（Conv + BN + ReLU + MatMul + Add + Softmax decomposition）经 **Linalg → Bufferize → Loops/Affine/Vector → LLVM** 降至 LLVM Dialect 的 C++ 演示工程：官方 MLIR Pass + **10 个自定义 teaching pass**，支持 JIT、分阶段 IR 导出与回归测试。
+将 StableHLO 子图（Conv + BN + ReLU + MatMul + Add + Softmax decomposition）经 **Linalg → Bufferize → Loops/Affine/Vector → LLVM** 降至 LLVM Dialect 的 C++ 演示工程：官方 MLIR Pass + **11 个自定义 teaching pass**，支持 JIT、mlir-opt plugin、跨仓库 Attention e2e 与回归测试。
 
 - 概念对齐：[`mlir_compiler`](../mlir_compiler/src/mlir/README.md) P5–P9  
 - 环境安装：[`mlir_compiler` cpu README](../mlir_compiler/src/mlir/cpu/README.md) §1.2–§1.5  
@@ -63,7 +63,7 @@ ninja -C build
 
 - `build/compile_commands.json`：IDE / clangd（`CMAKE_EXPORT_COMPILE_COMMANDS=ON`）
 - `-fno-rtti`：匹配 MLIR ABI（CMake 已设置）
-- CMake 目标：`test_shell_regression`（Shell regression）、`run_pipeline_demo`（IR 落盘）；若找到 lit/FileCheck，另有 `test_lit_filecheck`、`test_all`
+- CMake 目标：`test_shell_regression`（Shell regression）、`run_pipeline_demo`（IR 落盘）、`AICompilerPlugin`（mlir-opt plugin）；若找到 lit/FileCheck，另有 `test_lit_filecheck`、`test_attention_e2e`、`test_mlir_opt_plugin`、`test_all`
 
 ### 命令速查
 
@@ -76,6 +76,8 @@ ninja -C build
 | 运行 pipeline | `./build/tools/pipe-demo/pipe-demo --input=test/mini_model.mlir --loop-mode=scf-seq` | — | 直接运行完整 pipeline |
 | Shell regression | `bash scripts/test_shell_regression.sh` | `ninja -C build test_shell_regression` | 用 Bash + `grep` 断言 pipeline、fusion、stop-after、JIT 正确 |
 | LIT/FileCheck | `bash scripts/test_lit_filecheck.sh` | `ninja -C build test_lit_filecheck` | 只执行 `test/lit/*.mlir` 的 FileCheck 用例 |
+| Attention 跨仓库 e2e | `bash scripts/run_attention_e2e.sh` | `ninja -C build test_attention_e2e` | `mlir_compiler` P4 Attention ONNX → StableHLO → fusion |
+| mlir-opt plugin | `build/tools/mlir-opt-plugin/run_aicom_mlir_opt.sh` | `ninja -C build test_mlir_opt_plugin` | 用 `aicom-fusion` pipeline 跑 fusion passes |
 | 全量测试 | `bash scripts/test_all.sh` | `ninja -C build test_all` | 先 Shell regression，再 LIT/FileCheck |
 | IR 落盘 Demo | `bash scripts/run_pipeline_demo.sh` | `ninja -C build run_pipeline_demo` | 生成各 stage IR 与 pass trace 到 `output/pipeline-dumps/latest/` |
 
@@ -91,10 +93,12 @@ ninja -C build test_shell_regression
 完整验证与演示工作流：
 
 ```bash
-ninja -C build test_shell_regression   # Shell regression
-ninja -C build test_lit_filecheck   # 仅 LIT/FileCheck（需要 lit + FileCheck）
-ninja -C build test_all             # Shell regression + LIT/FileCheck
-ninja -C build run_pipeline_demo    # IR 落盘到 output/pipeline-dumps/latest/
+ninja -C build test_shell_regression   # Shell regression（15 项）
+ninja -C build test_lit_filecheck      # LIT/FileCheck（8 项，需 lit + FileCheck）
+ninja -C build test_mlir_opt_plugin    # mlir-opt + AICompilerPlugin
+ninja -C build test_attention_e2e      # 跨仓库 Attention ONNX→StableHLO→fusion
+ninja -C build test_all                # Shell regression + LIT/FileCheck
+ninja -C build run_pipeline_demo       # IR 落盘到 output/pipeline-dumps/latest/
 ```
 
 对应脚本入口：
@@ -296,6 +300,9 @@ pipe-demo --input=test/matmul_add.mlir --jit --loop-mode=scf-seq
 | `test/mini_model.mlir` | 全图 Conv→BN→ReLU→MatMul→Add |
 | `test/conv_bn_relu.mlir` | Conv+BN+ReLU fusion（ReLU → clamp） |
 | `test/lit/softmax_legalize.mlir` | Softmax decomposition canonicalization |
+| `test/lit/constant_fold.mlir` | StableHLO 双常量子图编译期折叠 |
+| `test/lit/dynamic_batch.mlir` | 动态 batch（`tensor<?x3xf32>`）fusion + linalg smoke |
+| `test/fixtures/attention_p4.mlir` | 由 `mlir_compiler` P4 导出的 Attention StableHLO（跨仓库 e2e） |
 | `test/matmul_add.mlir` | MatMul+Add，JIT |
 
 ---
@@ -308,7 +315,7 @@ pipe-demo --input=test/matmul_add.mlir --jit --loop-mode=scf-seq
 
 | Stage | 停止参数 | 主要 IR 变化 | 自定义 pass |
 |-------|----------|--------------|-------------|
-| 1 fusion | `--pipeline-stop-after=fusion` | StableHLO 图优化：Conv+BN 融合、ReLU→clamp、Softmax 子图标注 | `conv-bn-fusion`、`conv-bn-relu-fusion`、`softmax-legalize` |
+| 1 fusion | `--pipeline-stop-after=fusion` | StableHLO 图优化：常量折叠、Conv+BN 融合、ReLU→clamp、Softmax 子图标注 | `stablehlo-constant-fold`、`conv-bn-fusion`、`conv-bn-relu-fusion`、`softmax-legalize` |
 | 2 linalg | `--pipeline-stop-after=linalg` | StableHLO tensor ops → Linalg tensor ops | `custom-linalg-opt` |
 | 3 bufferize | `--pipeline-stop-after=bufferize` | tensor → memref，插入 buffer 管理 | `custom-buffer-opt` |
 | 4 loops | `--pipeline-stop-after=loops` | Linalg/memref → SCF → CF（`scf-seq` / `scf-par`） | `custom-loop-tiling` 或 `custom-linalg-to-parallel-loops` |
@@ -322,6 +329,7 @@ pipe-demo --input=test/matmul_add.mlir --jit --loop-mode=scf-seq
 |-------------|--------------|--------|----------|
 | `conv-bn-fusion` | fusion | `lib/Transforms/ConvBNFusion.cpp` | 用 rewrite pattern 将 BN 折叠进 Conv 权重和 bias |
 | `conv-bn-relu-fusion` | fusion | `lib/Transforms/ConvBNReluFusion.cpp` | 将 `stablehlo.maximum(x, 0)` 规范化为 `stablehlo.clamp(0, x, +inf)` |
+| `stablehlo-constant-fold` | fusion | `lib/Transforms/StablehloConstantFold.cpp` | 编译期折叠 `stablehlo.add`/`multiply` 双常量子图 |
 | `softmax-legalize` | fusion | `lib/Transforms/SoftmaxLegalize.cpp` | 识别 `exp / reduce_sum(exp)` 的 softmax 分解子图，为最终 `divide` 标注 `aicom.softmax_canonicalized` |
 | `custom-linalg-opt` | linalg | `lib/Transforms/CustomLinalgOpt.cpp` | 对常量输入的 elementwise `linalg.generic` 做编译期折叠 |
 | `custom-buffer-opt` | bufferize | `lib/Transforms/CustomBufferOpt.cpp` | 将小的 `memref.alloc` 提升为 `alloca`，但跳过 return buffer |
@@ -369,7 +377,7 @@ pipe-demo --input=test/matmul_add.mlir --jit --loop-mode=scf-seq
 
 | Stage | Pass 顺序 |
 |-------|-----------|
-| fusion | `conv-bn-fusion` → `conv-bn-relu-fusion` → `softmax-legalize` |
+| fusion | `stablehlo-constant-fold` → `conv-bn-fusion` → `conv-bn-relu-fusion` → `softmax-legalize` |
 | linalg | `stablehlo-legalize-to-linalg` → `canonicalize` / `cse` → `linalg-fuse-elementwise-ops` → `linalg-fold-unit-extent-dims` → `custom-linalg-opt` → `canonicalize` / `cse` |
 | bufferize | `one-shot-bufferize` → `buffer-deallocation-pipeline` → `custom-buffer-opt` → `canonicalize` / `cse` |
 | loops / `scf-seq` | `convert-bufferization-to-memref` → `convert-linalg-to-loops` → `custom-loop-tiling` → `convert-scf-to-cf` |
@@ -378,7 +386,25 @@ pipe-demo --input=test/matmul_add.mlir --jit --loop-mode=scf-seq
 | vector | `convert-bufferization-to-memref` → `convert-linalg-to-affine-loops` → `affine-super-vectorize` → `custom-vector-opt` → [`lower-affine` → `convert-scf-to-cf`] |
 | llvm | arith/cf/func/index/math lowering → [`convert-vector-to-llvm` if vector path] → `finalize-memref-to-llvm` → `reconcile-unrealized-casts` → `custom-llvm-cleanup` |
 
-本仓库没有提供单独的 `mlir-opt` pass plugin target；如果要像上游 MLIR 那样手写 pass pipeline，需要另行封装插件或使用 MLIR pass pipeline 工具链。
+本仓库提供 `AICompilerPlugin`（`tools/mlir-opt-plugin/`），可将 fusion stage 的 4 个 pass 以 mlir-opt dialect/pass plugin 形式加载，并通过 `aicom-fusion` pipeline 一键执行：
+
+```bash
+ninja -C build AICompilerPlugin test_mlir_opt_plugin
+# 或手动（在 build/tools/mlir-opt-plugin/ 目录下）：
+run_aicom_mlir_opt.sh mlir-opt input.mlir output.mlir
+```
+
+等价的 `mlir-opt` 命令：
+
+```bash
+mlir-opt input.mlir \
+  --load-dialect-plugin=./libAICompilerPlugin.so \
+  --load-pass-plugin=./libAICompilerPlugin.so \
+  '--pass-pipeline=builtin.module(aicom-fusion)' \
+  -o output.mlir
+```
+
+`pipe-demo` 仍是完整 pipeline 驱动；fusion passes 需通过 plugin 或 `pipe-demo --pipeline-stop-after=fusion` 触发，不会出现在裸 `mlir-opt --help` 里。
 
 ### Lowering 路径摘要
 
@@ -424,6 +450,7 @@ StableHLO → Linalg → bufferize(memref)
 == fusion stage: conv_bn_relu.mlir (--dump-ir) → no batch_norm_inference ==
 == fusion stage: conv_bn_relu.mlir → ReLU canonicalized to clamp ==
 == fusion stage: softmax_legalize.mlir → softmax divide annotated ==
+== fusion stage: constant_fold.mlir → add/mul folded to constant ==
 == stop-after=fusion: mini_model.mlir → StableHLO (stablehlo.convolution), no LLVM ==
 == stop-after=affine: matmul_add.mlir (loop-mode=affine --dump-ir) → affine.for, no LLVM ==
 == stop-after=vector: matmul_add.mlir (loop-mode=vector --dump-ir) → vector ops, no LLVM ==
@@ -446,28 +473,32 @@ All requested tests passed.
 | 7 | `fusion stage: conv_bn_relu.mlir (--dump-ir) → no batch_norm_inference` | `conv_bn_relu.mlir`，`--dump-ir`；取 fusion stage IR 片段 | 该片段**不含** `batch_norm_inference` |
 | 8 | `fusion stage: conv_bn_relu.mlir → ReLU canonicalized to clamp` | 同上 fusion 片段 | **含** `stablehlo.clamp`；**不含** `stablehlo.maximum` |
 | 9 | `fusion stage: softmax_legalize.mlir → softmax divide annotated` | `test/lit/softmax_legalize.mlir`，`--pipeline-stop-after=fusion` | **含** `aicom.softmax_canonicalized` |
-| 10 | `stop-after=fusion: mini_model.mlir → StableHLO (stablehlo.convolution), no LLVM` | `mini_model.mlir`，`--pipeline-stop-after=fusion` | **含** `stablehlo.convolution`；**不含** `llvm.func @inference` |
-| 11 | `stop-after=affine: matmul_add.mlir (loop-mode=affine --dump-ir) → affine.for, no LLVM` | `matmul_add.mlir`，`--loop-mode=affine --pipeline-stop-after=affine --dump-ir` | **含** `affine.for`；**不含** `llvm.func @inference` |
-| 12 | `stop-after=vector: matmul_add.mlir (loop-mode=vector --dump-ir) → vector ops, no LLVM` | `matmul_add.mlir`，`--loop-mode=vector --pipeline-stop-after=vector --dump-ir` | **含** `vector.`；**不含** `llvm.func @inference` |
-| 13 | `JIT smoke: matmul_add.mlir (--jit --loop-mode=scf-seq) → JIT result contains 1.5` | `matmul_add.mlir`，`--jit --loop-mode=scf-seq` | **含** `JIT result` 与 `1.5`（smoke test；完整期望 `1.5, 2.5, 3.5, 4.5`，见上文 JIT 说明） |
-| 14 | `compat: matmul_add.mlir (--no-vectorize) → LLVM (alias of loop-mode=scf-seq)` | `matmul_add.mlir`，`--no-vectorize` | 含 `llvm.func @inference` |
+| 10 | `fusion stage: constant_fold.mlir → add/mul folded to constant` | `test/lit/constant_fold.mlir`，`--pipeline-stop-after=fusion` | **不含** `stablehlo.add`/`multiply`；**含** `stablehlo.constant` |
+| 11 | `stop-after=fusion: mini_model.mlir → StableHLO (stablehlo.convolution), no LLVM` | `mini_model.mlir`，`--pipeline-stop-after=fusion` | **含** `stablehlo.convolution`；**不含** `llvm.func @inference` |
+| 12 | `stop-after=affine: matmul_add.mlir (loop-mode=affine --dump-ir) → affine.for, no LLVM` | `matmul_add.mlir`，`--loop-mode=affine --pipeline-stop-after=affine --dump-ir` | **含** `affine.for`；**不含** `llvm.func @inference` |
+| 13 | `stop-after=vector: matmul_add.mlir (loop-mode=vector --dump-ir) → vector ops, no LLVM` | `matmul_add.mlir`，`--loop-mode=vector --pipeline-stop-after=vector --dump-ir` | **含** `vector.`；**不含** `llvm.func @inference` |
+| 14 | `JIT smoke: matmul_add.mlir (--jit --loop-mode=scf-seq) → JIT result contains 1.5` | `matmul_add.mlir`，`--jit --loop-mode=scf-seq` | **含** `JIT result` 与 `1.5`（smoke test；完整期望 `1.5, 2.5, 3.5, 4.5`，见上文 JIT 说明） |
+| 15 | `compat: matmul_add.mlir (--no-vectorize) → LLVM (alias of loop-mode=scf-seq)` | `matmul_add.mlir`，`--no-vectorize` | 含 `llvm.func @inference` |
 
 说明：
 
 - **「全 pipeline」** 行（#1–#6）只证明 IR 里出现了 `@inference` 的 LLVM Lowering 结果，不检查具体数值。其中 #2 覆盖默认 `scf-par` 路径（`custom-linalg-to-parallel-loops`）；`matmul_add` 另覆盖 `scf-seq` / `affine` / `vector`（#1、#5、#6）。
-- **Fusion 行**（#7–#9）分别检查 Conv+BN 融合、ReLU→clamp 规范化、Softmax 分解子图标注。
-- **JIT 行**（#13）的 `grep 1.5` 是**最小 smoke test**：`matmul_add` 手算结果为 `[[1.5,2.5],[3.5,4.5]]`，脚本只确认输出串里出现 `1.5`，并未断言四个元素全对。
+- **Fusion 行**（#7–#10）分别检查 Conv+BN 融合、ReLU→clamp 规范化、Softmax 分解子图标注、常量折叠。
+- **JIT 行**（#14）的 `grep 1.5` 是**最小 smoke test**：`matmul_add` 手算结果为 `[[1.5,2.5],[3.5,4.5]]`，脚本只确认输出串里出现 `1.5`，并未断言四个元素全对。
 - 需要更细的 IR 检查请用 LIT/FileCheck（`test_lit_filecheck`）。
 
 ### LIT（可选）
 
-`test/lit/*.mlir`（共 5 个）通过 FileCheck 做更细的 IR 断言：
+`test/lit/*.mlir`（共 8 个）通过 FileCheck 做更细的 IR 断言：
 
 | 文件 | 检查内容 |
 |------|----------|
 | `conv_bn_fusion.mlir` | fusion 后无 `batch_norm_inference` |
 | `conv_bn_relu_fusion.mlir` | fusion 后出现 `stablehlo.clamp`，无 `stablehlo.maximum` |
 | `softmax_legalize.mlir` | fusion 后 softmax `divide` 带 `aicom.softmax_canonicalized` |
+| `constant_fold.mlir` | fusion 后 `stablehlo.add`/`multiply` 折叠为单个 `stablehlo.constant` |
+| `dynamic_batch.mlir` | 动态 batch 输入经 fusion/linalg 不崩溃，输出含 `tensor<?x…>`、`linalg.matmul` |
+| `attention_fusion_e2e.mlir` | P4 导出的 Attention 子图经 fusion 保留 `dot_general` 并标注 softmax |
 | `affine_lowering.mlir` | Affine 路径出现 `affine.for` |
 | `vector_lowering.mlir` | Vector 路径出现 `vector.` 相关 op |
 
@@ -490,7 +521,8 @@ output/pipeline-dumps/latest/
 
 | mlir_compiler | mlir_pass stage | 说明 |
 |---------------|-----------------|------|
-| `6_stablehlo_passes/` | fusion | 真实 MLIR `conv-bn-fusion`（本仓库另含 `conv-bn-relu-fusion`、`softmax-legalize`） |
+| `6_stablehlo_passes/` | fusion | 真实 MLIR `conv-bn-fusion`（本仓库另含 `conv-bn-relu-fusion`、`softmax-legalize`、`stablehlo-constant-fold`） |
+| `5_onnx_to_stablehlo/` P4 tier 3 | fusion 输入 | `run_lowering_l3 --mlir-only lowering_attention.onnx` 导出 StableHLO → `test_attention_e2e` / LIT |
 | `7_stablehlo_opt/` | — | 图优化概念并入 stage 2 |
 | `8_linalg_opt/` | linalg | + `custom-linalg-opt` |
 | `9_bufferize/` | bufferize | + `custom-buffer-opt` |
@@ -498,7 +530,9 @@ output/pipeline-dumps/latest/
 | `11_vector/` | vector | Vector dialect + `convert-vector-to-llvm` |
 | `12_llvm_lowering/` | llvm | 真实 LLVM + JIT |
 
-[`mlir_compiler` gpu](../mlir_compiler/src/mlir/gpu/) 为 header-only 教学 IR；本仓库为真实 `PassManager`。CPU `mlir-opt` 命令链见 [cpu README §2.5](../mlir_compiler/src/mlir/cpu/README.md)。
+**跨仓库 e2e：** 先构建 [`mlir_compiler`](../mlir_compiler/) 的 `run_lowering_l3` 与 ONNX fixture，再在本仓库执行 `ninja -C build test_attention_e2e`。脚本 `scripts/run_attention_e2e.sh` 完成 Attention ONNX → StableHLO text → `pipe-demo --pipeline-stop-after=fusion`。
+
+[`mlir_compiler` gpu](../mlir_compiler/src/mlir/gpu/) 为 header-only 教学 IR（P6–P12）；本仓库为真实 `PassManager` + `AICompilerPlugin`。CPU `mlir-opt` 命令链见 [cpu README §2.5](../mlir_compiler/src/mlir/cpu/README.md)。
 
 ---
 

@@ -1,0 +1,9 @@
+#!/bin/sh
+# Run mlir-opt with AICompilerPlugin and the aicom-fusion pipeline.
+# Usage: run_aicom_mlir_opt.sh <mlir-opt> <input.mlir> <output.mlir>
+set -e
+exec "$1" "$2" \
+  --load-dialect-plugin=./libAICompilerPlugin.so \
+  --load-pass-plugin=./libAICompilerPlugin.so \
+  '--pass-pipeline=builtin.module(aicom-fusion)' \
+  -o "$3"

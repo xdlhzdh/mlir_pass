@@ -1,4 +1,5 @@
 #include "AICompiler/Passes.h"
+#include "AICompiler/PipelineStages.h"
 
 #include "mlir/Pass/PassRegistry.h"
 #include "llvm/Support/raw_ostream.h"
@@ -7,6 +8,8 @@ void registerAICompilerPasses() {
   ::mlir::registerPass([] { return mlir::aicom::createConvBNFusionPass(); });
   ::mlir::registerPass([] { return mlir::aicom::createConvBNReluFusionPass(); });
   ::mlir::registerPass([] { return mlir::aicom::createSoftmaxLegalizePass(); });
+  ::mlir::registerPass(
+      [] { return mlir::aicom::createStablehloConstantFoldPass(); });
   ::mlir::registerPass([] { return mlir::aicom::createCustomLinalgOptPass(); });
   ::mlir::registerPass([] { return mlir::aicom::createCustomBufferOptPass(); });
   ::mlir::registerPass(
@@ -15,6 +18,20 @@ void registerAICompilerPasses() {
   ::mlir::registerPass([] { return mlir::aicom::createCustomAffineOptPass(); });
   ::mlir::registerPass([] { return mlir::aicom::createCustomVectorOptPass(); });
   ::mlir::registerPass([] { return mlir::aicom::createCustomLLVMCleanupPass(); });
+}
+
+void registerAICompilerPassPipelines() {
+  ::mlir::registerPassPipeline(
+      "aicom-fusion", "mlir_pass StableHLO fusion stage passes",
+      [](::mlir::OpPassManager &pm, llvm::StringRef options,
+         ::mlir::function_ref<::mlir::LogicalResult(const llvm::Twine &)>
+             errorHandler) {
+        if (!options.empty())
+          return errorHandler("no options expected");
+        mlir::aicom::buildFusionStage(pm);
+        return ::mlir::success();
+      },
+      [](::mlir::function_ref<void(const ::mlir::detail::PassOptions &)>){});
 }
 
 namespace mlir {
@@ -37,6 +54,7 @@ void printAICompilerPassList(llvm::raw_ostream &os) {
       "conv-bn-fusion",                  // fusion
       "conv-bn-relu-fusion",             // fusion
       "softmax-legalize",                // fusion
+      "stablehlo-constant-fold",         // fusion
       "custom-linalg-opt",               // linalg
       "custom-buffer-opt",               // bufferize
       "custom-loop-tiling",              // loops / scf-seq
@@ -46,7 +64,7 @@ void printAICompilerPassList(llvm::raw_ostream &os) {
       "custom-llvm-cleanup",             // llvm
   };
   static constexpr llvm::StringRef kStages[] = {
-      "fusion", "fusion", "fusion", "linalg", "bufferize",
+      "fusion", "fusion", "fusion", "fusion", "linalg", "bufferize",
       "loops/scf-seq", "loops/scf-par", "affine", "vector", "llvm",
   };
   static constexpr size_t kNumPasses = sizeof(kPasses) / sizeof(kPasses[0]);

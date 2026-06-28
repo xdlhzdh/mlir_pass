@@ -84,6 +84,7 @@ LogicalResult validatePipelineOptions(PipelineStage stopAfter,
 }
 
 void buildFusionStage(OpPassManager &pm) {
+  pm.addNestedPass<func::FuncOp>(createStablehloConstantFoldPass());
   pm.addNestedPass<func::FuncOp>(createConvBNFusionPass());
   pm.addNestedPass<func::FuncOp>(createConvBNReluFusionPass());
   pm.addNestedPass<func::FuncOp>(createSoftmaxLegalizePass());

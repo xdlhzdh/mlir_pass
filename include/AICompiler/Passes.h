@@ -13,6 +13,7 @@ namespace aicom {
 std::unique_ptr<Pass> createConvBNFusionPass();
 std::unique_ptr<Pass> createConvBNReluFusionPass();
 std::unique_ptr<Pass> createSoftmaxLegalizePass();
+std::unique_ptr<Pass> createStablehloConstantFoldPass();
 std::unique_ptr<Pass> createCustomLinalgOptPass();
 std::unique_ptr<Pass> createCustomBufferOptPass();
 std::unique_ptr<Pass> createCustomLinalgToParallelLoopsPass();
@@ -27,5 +28,6 @@ void printAICompilerPassList(llvm::raw_ostream &os);
 } // namespace mlir
 
 void registerAICompilerPasses();
+void registerAICompilerPassPipelines();
 
 #endif // AICOMPILER_PASSES_H

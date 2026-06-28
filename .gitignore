@@ -7,6 +7,7 @@ local_cache/
 
 # Build directory
 build/
+test/**/*.md
 
 # Pipeline demo IR dumps (scripts/run_pipeline_demo.sh)
 output/
