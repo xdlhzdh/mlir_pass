@@ -43,6 +43,55 @@ def SoftmaxLegalize : Pass<"softmax-legalize", "func::FuncOp"> {
   ];
 }
 
+def RMSNormLegalize : Pass<"rmsnorm-legalize", "func::FuncOp"> {
+  let summary = "Canonicalize StableHLO RMSNorm decomposition";
+  let description = [{
+    Recognizes RMSNorm decomposed as `x / sqrt(reduce_mean(x*x) + eps) * weight`
+    and annotates the final multiply with `aicom.rmsnorm_canonicalized`.
+  }];
+  let constructor = "mlir::aicom::createRMSNormLegalizePass()";
+  let dependentDialects = [
+    "stablehlo::StablehloDialect",
+  ];
+}
+
+def AttentionLegalize : Pass<"attention-legalize", "func::FuncOp"> {
+  let summary = "Mark scaled dot-product attention subgraph boundary";
+  let description = [{
+    After `softmax-legalize`, recognizes `dot_general(softmax(...), V)` as the
+    second matmul in scaled dot-product attention and annotates it with
+    `aicom.scaled_dot_product_attention`.
+  }];
+  let constructor = "mlir::aicom::createAttentionLegalizePass()";
+  let dependentDialects = [
+    "stablehlo::StablehloDialect",
+  ];
+}
+
+def RoPELegalize : Pass<"rope-legalize", "func::FuncOp"> {
+  let summary = "Canonicalize StableHLO RoPE decomposition";
+  let description = [{
+    Recognizes rotate-half style RoPE `x*cos + rotate_half(x)*sin` and annotates
+    the final add with `aicom.rope_canonicalized`.
+  }];
+  let constructor = "mlir::aicom::createRoPELegalizePass()";
+  let dependentDialects = [
+    "stablehlo::StablehloDialect",
+  ];
+}
+
+def LayerNormLegalize : Pass<"layernorm-legalize", "func::FuncOp"> {
+  let summary = "Canonicalize StableHLO LayerNorm decomposition";
+  let description = [{
+    Recognizes LayerNorm `gamma * (x - mean) / sqrt(var + eps) + beta` and annotates
+    the final add with `aicom.layernorm_canonicalized`.
+  }];
+  let constructor = "mlir::aicom::createLayerNormLegalizePass()";
+  let dependentDialects = [
+    "stablehlo::StablehloDialect",
+  ];
+}
+
 def StablehloConstantFold : Pass<"stablehlo-constant-fold", "func::FuncOp"> {
   let summary = "Fold constant StableHLO elementwise add/mul at compile time";
   let description = [{

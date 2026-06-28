@@ -13,6 +13,10 @@ namespace aicom {
 std::unique_ptr<Pass> createConvBNFusionPass();
 std::unique_ptr<Pass> createConvBNReluFusionPass();
 std::unique_ptr<Pass> createSoftmaxLegalizePass();
+std::unique_ptr<Pass> createRMSNormLegalizePass();
+std::unique_ptr<Pass> createAttentionLegalizePass();
+std::unique_ptr<Pass> createRoPELegalizePass();
+std::unique_ptr<Pass> createLayerNormLegalizePass();
 std::unique_ptr<Pass> createStablehloConstantFoldPass();
 std::unique_ptr<Pass> createCustomLinalgOptPass();
 std::unique_ptr<Pass> createCustomBufferOptPass();

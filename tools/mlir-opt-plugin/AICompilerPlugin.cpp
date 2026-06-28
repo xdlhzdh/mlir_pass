@@ -13,12 +13,16 @@
 namespace {
 
 void registerFusionPasses() {
-  ::mlir::registerPass(
-      [] { return mlir::aicom::createStablehloConstantFoldPass(); });
   ::mlir::registerPass([] { return mlir::aicom::createConvBNFusionPass(); });
   ::mlir::registerPass(
       [] { return mlir::aicom::createConvBNReluFusionPass(); });
   ::mlir::registerPass([] { return mlir::aicom::createSoftmaxLegalizePass(); });
+  ::mlir::registerPass([] { return mlir::aicom::createRMSNormLegalizePass(); });
+  ::mlir::registerPass([] { return mlir::aicom::createAttentionLegalizePass(); });
+  ::mlir::registerPass([] { return mlir::aicom::createRoPELegalizePass(); });
+  ::mlir::registerPass([] { return mlir::aicom::createLayerNormLegalizePass(); });
+  ::mlir::registerPass(
+      [] { return mlir::aicom::createStablehloConstantFoldPass(); });
 }
 
 void registerFusionPipeline() {
@@ -30,13 +34,21 @@ void registerFusionPipeline() {
         if (!options.empty())
           return errorHandler("no options expected");
         pm.addNestedPass<::mlir::func::FuncOp>(
-            mlir::aicom::createStablehloConstantFoldPass());
-        pm.addNestedPass<::mlir::func::FuncOp>(
             mlir::aicom::createConvBNFusionPass());
         pm.addNestedPass<::mlir::func::FuncOp>(
             mlir::aicom::createConvBNReluFusionPass());
         pm.addNestedPass<::mlir::func::FuncOp>(
             mlir::aicom::createSoftmaxLegalizePass());
+        pm.addNestedPass<::mlir::func::FuncOp>(
+            mlir::aicom::createRMSNormLegalizePass());
+        pm.addNestedPass<::mlir::func::FuncOp>(
+            mlir::aicom::createAttentionLegalizePass());
+        pm.addNestedPass<::mlir::func::FuncOp>(
+            mlir::aicom::createRoPELegalizePass());
+        pm.addNestedPass<::mlir::func::FuncOp>(
+            mlir::aicom::createLayerNormLegalizePass());
+        pm.addNestedPass<::mlir::func::FuncOp>(
+            mlir::aicom::createStablehloConstantFoldPass());
         return ::mlir::success();
       },
       [](::mlir::function_ref<void(const ::mlir::detail::PassOptions &)>){});

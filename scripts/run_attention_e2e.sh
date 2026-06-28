@@ -32,6 +32,7 @@ echo "== mlir_pass fusion on exported attention graph =="
 out="$("$DEMO" --input="$FIXTURE" --pipeline-stop-after=fusion 2>&1)"
 grep -q 'stablehlo.dot_general' <<<"$out"
 grep -q 'aicom.softmax_canonicalized' <<<"$out"
+grep -q 'aicom.scaled_dot_product_attention' <<<"$out"
 
 echo "Attention P4 -> mlir_pass fusion e2e passed."
 echo "Fixture: $FIXTURE"

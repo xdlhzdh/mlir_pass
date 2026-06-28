@@ -6,6 +6,10 @@ set(_plugin_pass_srcs
   ${PROJECT_SOURCE_DIR}/lib/Transforms/ConvBNFusion.cpp
   ${PROJECT_SOURCE_DIR}/lib/Transforms/ConvBNReluFusion.cpp
   ${PROJECT_SOURCE_DIR}/lib/Transforms/SoftmaxLegalize.cpp
+  ${PROJECT_SOURCE_DIR}/lib/Transforms/RMSNormLegalize.cpp
+  ${PROJECT_SOURCE_DIR}/lib/Transforms/AttentionLegalize.cpp
+  ${PROJECT_SOURCE_DIR}/lib/Transforms/RoPELegalize.cpp
+  ${PROJECT_SOURCE_DIR}/lib/Transforms/LayerNormLegalize.cpp
 )
 
 add_library(AICompilerPlugin SHARED ${_plugin_pass_srcs})

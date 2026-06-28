@@ -84,10 +84,14 @@ LogicalResult validatePipelineOptions(PipelineStage stopAfter,
 }
 
 void buildFusionStage(OpPassManager &pm) {
-  pm.addNestedPass<func::FuncOp>(createStablehloConstantFoldPass());
   pm.addNestedPass<func::FuncOp>(createConvBNFusionPass());
   pm.addNestedPass<func::FuncOp>(createConvBNReluFusionPass());
   pm.addNestedPass<func::FuncOp>(createSoftmaxLegalizePass());
+  pm.addNestedPass<func::FuncOp>(createRMSNormLegalizePass());
+  pm.addNestedPass<func::FuncOp>(createAttentionLegalizePass());
+  pm.addNestedPass<func::FuncOp>(createRoPELegalizePass());
+  pm.addNestedPass<func::FuncOp>(createLayerNormLegalizePass());
+  pm.addNestedPass<func::FuncOp>(createStablehloConstantFoldPass());
 }
 
 } // namespace aicom

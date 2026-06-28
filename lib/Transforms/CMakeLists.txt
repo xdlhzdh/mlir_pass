@@ -6,6 +6,10 @@ add_library(AICompilerTransforms STATIC
   ConvBNFusion.cpp
   ConvBNReluFusion.cpp
   SoftmaxLegalize.cpp
+  RMSNormLegalize.cpp
+  AttentionLegalize.cpp
+  RoPELegalize.cpp
+  LayerNormLegalize.cpp
   StablehloConstantFold.cpp
   CustomLinalgOpt.cpp
   CustomBufferOpt.cpp

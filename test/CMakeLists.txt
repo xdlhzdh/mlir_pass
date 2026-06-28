@@ -35,6 +35,28 @@ if(FILECHECK_EXE AND LIT_EXE)
        DESTINATION "${_lit_dir}")
   file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/lit/attention_fusion_e2e.mlir"
        DESTINATION "${_lit_dir}")
+  file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/lit/rmsnorm_legalize.mlir"
+       DESTINATION "${_lit_dir}")
+  file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/lit/attention_legalize.mlir"
+       DESTINATION "${_lit_dir}")
+  file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/lit/rmsnorm_fusion_e2e.mlir"
+       DESTINATION "${_lit_dir}")
+  file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/lit/rope_fusion_e2e.mlir"
+       DESTINATION "${_lit_dir}")
+  file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/lit/rope_legalize.mlir"
+       DESTINATION "${_lit_dir}")
+  file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/lit/bufferize_smoke.mlir"
+       DESTINATION "${_lit_dir}")
+  file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/lit/softmax_fusion_e2e.mlir"
+       DESTINATION "${_lit_dir}")
+  file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/lit/layernorm_legalize.mlir"
+       DESTINATION "${_lit_dir}")
+  file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/lit/layernorm_fusion_e2e.mlir"
+       DESTINATION "${_lit_dir}")
+  file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/lit/linalg_fusion_smoke.mlir"
+       DESTINATION "${_lit_dir}")
+  file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/lit/loops_smoke.mlir"
+       DESTINATION "${_lit_dir}")
 
   add_custom_target(test_attention_e2e
     COMMAND ${CMAKE_COMMAND} -E env
@@ -44,6 +66,15 @@ if(FILECHECK_EXE AND LIT_EXE)
     DEPENDS pipe-demo
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
     COMMENT "Cross-repo attention ONNX->StableHLO->mlir_pass fusion e2e")
+
+  add_custom_target(test_transformer_e2e
+    COMMAND ${CMAKE_COMMAND} -E env
+            "MLIR_COMPILER_BUILD=${CMAKE_SOURCE_DIR}/../mlir_compiler/build"
+            "MLIR_PASS_BUILD=${CMAKE_BINARY_DIR}"
+            bash ${CMAKE_SOURCE_DIR}/scripts/run_transformer_e2e.sh
+    DEPENDS pipe-demo
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    COMMENT "Cross-repo Transformer ONNX->StableHLO->mlir_pass fusion e2e")
 
   add_custom_target(test_lit_filecheck
     COMMAND ${CMAKE_COMMAND} -E env "LIT_EXE=${LIT_EXE}" "FILECHECK_EXE=${FILECHECK_EXE}"

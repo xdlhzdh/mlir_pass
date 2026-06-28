@@ -56,6 +56,26 @@ softmax_out="$("${DEMO}" --input="${ROOT}/test/lit/softmax_legalize.mlir" \
   --pipeline-stop-after=fusion 2>&1)"
 grep -q 'aicom.softmax_canonicalized' <<<"${softmax_out}"
 
+echo "== fusion stage: rmsnorm_legalize.mlir → RMSNorm multiply annotated =="
+rmsnorm_out="$("${DEMO}" --input="${ROOT}/test/lit/rmsnorm_legalize.mlir" \
+  --pipeline-stop-after=fusion 2>&1)"
+grep -q 'aicom.rmsnorm_canonicalized' <<<"${rmsnorm_out}"
+
+echo "== fusion stage: attention_legalize.mlir → SDP attention annotated =="
+attn_out="$("${DEMO}" --input="${ROOT}/test/lit/attention_legalize.mlir" \
+  --pipeline-stop-after=fusion 2>&1)"
+grep -q 'aicom.scaled_dot_product_attention' <<<"${attn_out}"
+
+echo "== fusion stage: rope_legalize.mlir → RoPE add annotated =="
+rope_out="$("${DEMO}" --input="${ROOT}/test/lit/rope_legalize.mlir" \
+  --pipeline-stop-after=fusion 2>&1)"
+grep -q 'aicom.rope_canonicalized' <<<"${rope_out}"
+
+echo "== fusion stage: layernorm_legalize.mlir → LayerNorm add annotated =="
+ln_out="$("${DEMO}" --input="${ROOT}/test/lit/layernorm_legalize.mlir" \
+  --pipeline-stop-after=fusion 2>&1)"
+grep -q 'aicom.layernorm_canonicalized' <<<"${ln_out}"
+
 echo "== fusion stage: constant_fold.mlir → add/mul folded to constant =="
 fold_out="$("${DEMO}" --input="${ROOT}/test/lit/constant_fold.mlir" \
   --pipeline-stop-after=fusion 2>&1)"
