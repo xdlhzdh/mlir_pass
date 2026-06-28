@@ -4,6 +4,8 @@ add_public_tablegen_target(AICompilerPassIncGen)
 
 add_library(AICompilerTransforms STATIC
   ConvBNFusion.cpp
+  ConvBNReluFusion.cpp
+  SoftmaxLegalize.cpp
   CustomLinalgOpt.cpp
   CustomBufferOpt.cpp
   CustomLinalgToParallelLoops.cpp

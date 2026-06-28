@@ -15,6 +15,34 @@ def ConvBNFusion : Pass<"conv-bn-fusion", "func::FuncOp"> {
   ];
 }
 
+def ConvBNReluFusion : Pass<"conv-bn-relu-fusion", "func::FuncOp"> {
+  let summary = "Canonicalize StableHLO ReLU after Conv+BN fusion";
+  let description = [{
+    Custom teaching pass: recognizes ReLU written as
+    `stablehlo.maximum(%x, zero)` after graph fusion and rewrites it to
+    `stablehlo.clamp(zero, %x, +inf)`, making the activation explicit in the
+    fused StableHLO stage.
+  }];
+  let constructor = "mlir::aicom::createConvBNReluFusionPass()";
+  let dependentDialects = [
+    "stablehlo::StablehloDialect",
+  ];
+}
+
+def SoftmaxLegalize : Pass<"softmax-legalize", "func::FuncOp"> {
+  let summary = "Canonicalize StableHLO softmax decomposition";
+  let description = [{
+    Custom teaching pass: recognizes the numerically stable StableHLO softmax
+    decomposition `exp(x - reduce_max(x)) / reduce_sum(exp(...))` and annotates
+    the final divide so later pipeline stages and tests can identify the
+    softmax boundary explicitly.
+  }];
+  let constructor = "mlir::aicom::createSoftmaxLegalizePass()";
+  let dependentDialects = [
+    "stablehlo::StablehloDialect",
+  ];
+}
+
 def CustomLinalgOpt : Pass<"custom-linalg-opt", "func::FuncOp"> {
   let summary = "Fold constant elementwise linalg.generic at compile time";
   let description = [{

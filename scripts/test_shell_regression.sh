@@ -44,6 +44,18 @@ if grep -q batch_norm_inference <<<"${fusion_block}"; then
   exit 1
 fi
 
+echo "== fusion stage: conv_bn_relu.mlir → ReLU canonicalized to clamp =="
+grep -q 'stablehlo.clamp' <<<"${fusion_block}"
+if grep -q 'stablehlo.maximum' <<<"${fusion_block}"; then
+  echo "error: stablehlo.maximum should be canonicalized to stablehlo.clamp" >&2
+  exit 1
+fi
+
+echo "== fusion stage: softmax_legalize.mlir → softmax divide annotated =="
+softmax_out="$("${DEMO}" --input="${ROOT}/test/lit/softmax_legalize.mlir" \
+  --pipeline-stop-after=fusion 2>&1)"
+grep -q 'aicom.softmax_canonicalized' <<<"${softmax_out}"
+
 echo "== stop-after=fusion: mini_model.mlir → StableHLO (stablehlo.convolution), no LLVM =="
 stop_out="$("${DEMO}" --input="${ROOT}/test/mini_model.mlir" --pipeline-stop-after=fusion 2>&1)"
 grep -q 'stablehlo.convolution' <<<"${stop_out}"

@@ -106,12 +106,12 @@ struct ConvBNFusionPattern
     auto resultType = cast<RankedTensorType>(bnOp.getResult().getType());
     int64_t featureIndex = bnOp.getFeatureIndex();
     SmallVector<int64_t> broadcastDims = {featureIndex};
-    Value biasBroadcast = rewriter.create<stablehlo::BroadcastInDimOp>(
-        bnOp.getLoc(), resultType, biasConst,
+    Value biasBroadcast = stablehlo::BroadcastInDimOp::create(
+        rewriter, bnOp.getLoc(), resultType, biasConst,
         rewriter.getDenseI64ArrayAttr(broadcastDims));
 
-    Value fused = rewriter.create<stablehlo::AddOp>(
-        bnOp.getLoc(), resultType, fusedConv, biasBroadcast);
+    Value fused = stablehlo::AddOp::create(rewriter, bnOp.getLoc(), resultType,
+                                           fusedConv, biasBroadcast);
     rewriter.replaceOp(bnOp, fused);
     if (convOp->use_empty())
       rewriter.eraseOp(convOp);

@@ -11,6 +11,8 @@ namespace aicom {
 #include "Passes.h.inc"
 
 std::unique_ptr<Pass> createConvBNFusionPass();
+std::unique_ptr<Pass> createConvBNReluFusionPass();
+std::unique_ptr<Pass> createSoftmaxLegalizePass();
 std::unique_ptr<Pass> createCustomLinalgOptPass();
 std::unique_ptr<Pass> createCustomBufferOptPass();
 std::unique_ptr<Pass> createCustomLinalgToParallelLoopsPass();
