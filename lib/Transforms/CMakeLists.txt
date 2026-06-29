@@ -10,6 +10,15 @@ add_library(AICompilerTransforms STATIC
   AttentionLegalize.cpp
   RoPELegalize.cpp
   LayerNormLegalize.cpp
+  GeluLegalize.cpp
+  SwiGLULegalize.cpp
+  QdqLegalize.cpp
+  MatMulBiasFusion.cpp
+  HorizontalGemmFusion.cpp
+  ElementwiseChainLegalize.cpp
+  ProducerConsumerLegalize.cpp
+  LayoutBridgeLegalize.cpp
+  KVCacheLegalize.cpp
   StablehloConstantFold.cpp
   CustomLinalgOpt.cpp
   CustomBufferOpt.cpp

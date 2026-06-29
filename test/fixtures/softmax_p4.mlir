@@ -1,5 +1,5 @@
 module {
-  func.func @main(%arg0: tensor<2x4xf32>) -> tensor<2x4xf32> {
+  func.func @inference(%arg0: tensor<2x4xf32>) -> tensor<2x4xf32> {
     %0 = stablehlo.constant dense<-3.402823e+38> : tensor<f32>
     %1 = stablehlo.constant dense<0.0> : tensor<f32>
     %2 = stablehlo.reduce(%arg0 init: %0) applies stablehlo.maximum across dimensions = [1] : (tensor<2x4xf32>, tensor<f32>) -> tensor<2xf32>

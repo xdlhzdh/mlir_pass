@@ -92,6 +92,121 @@ def LayerNormLegalize : Pass<"layernorm-legalize", "func::FuncOp"> {
   ];
 }
 
+def GeluLegalize : Pass<"gelu-legalize", "func::FuncOp"> {
+  let summary = "Canonicalize StableHLO GELU decomposition";
+  let description = [{
+    Recognizes exact GELU `0.5 * x * (1 + erf(x / sqrt(2)))` and annotates the
+    final multiply with `aicom.gelu_canonicalized`.
+  }];
+  let constructor = "mlir::aicom::createGeluLegalizePass()";
+  let dependentDialects = [
+    "stablehlo::StablehloDialect",
+    "chlo::ChloDialect",
+  ];
+}
+
+def SwiGLULegalize : Pass<"swiglu-legalize", "func::FuncOp"> {
+  let summary = "Canonicalize StableHLO SwiGLU decomposition";
+  let description = [{
+    Recognizes SwiGLU `silu(gate) * up` where `silu(x)=x/(1+exp(-x))` and
+    annotates the final multiply with `aicom.swiglu_canonicalized`.
+  }];
+  let constructor = "mlir::aicom::createSwiGLULegalizePass()";
+  let dependentDialects = [
+    "stablehlo::StablehloDialect",
+  ];
+}
+
+def QdqLegalize : Pass<"qdq-legalize", "func::FuncOp"> {
+  let summary = "Canonicalize StableHLO Q/DQ MatMul decomposition";
+  let description = [{
+    Recognizes MatMul whose operands are ONNX-style dequantize chains
+    `(x - zp) * scale` and annotates `aicom.qdq_matmul_canonicalized`.
+  }];
+  let constructor = "mlir::aicom::createQdqLegalizePass()";
+  let dependentDialects = [
+    "stablehlo::StablehloDialect",
+  ];
+}
+
+def MatMulBiasFusion : Pass<"matmul-bias-fusion", "func::FuncOp"> {
+  let summary = "Fuse StableHLO dot_general followed by constant bias add";
+  let description = [{
+    Matches `stablehlo.add` whose operand is `stablehlo.dot_general` and the
+    other operand is a constant bias (optionally via `broadcast_in_dim`), then
+    annotates the add with `aicom.matmul_bias_fused`.
+  }];
+  let constructor = "mlir::aicom::createMatMulBiasFusionPass()";
+  let dependentDialects = [
+    "stablehlo::StablehloDialect",
+  ];
+}
+
+def HorizontalGemmFusion : Pass<"horizontal-gemm-fusion", "func::FuncOp"> {
+  let summary = "Fuse shared-LHS dot_general outputs concatenated on last dim";
+  let description = [{
+    Matches `stablehlo.concatenate` whose operands are two
+    `stablehlo.dot_general` ops sharing the same LHS (horizontal GEMM pattern:
+    `concat(matmul(X,W1), matmul(X,W2))`), then annotates the concat with
+    `aicom.horizontal_gemm_fused`.
+  }];
+  let constructor = "mlir::aicom::createHorizontalGemmFusionPass()";
+  let dependentDialects = [
+    "stablehlo::StablehloDialect",
+  ];
+}
+
+def ElementwiseChainLegalize : Pass<"elementwise-chain-legalize", "func::FuncOp"> {
+  let summary = "Annotate elementwise chain fused with ReLU boundary";
+  let description = [{
+    Recognizes ReLU written as `maximum(add/mul(...), zero)` or
+    `clamp(0, add/mul(...), +inf)` and annotates the activation op with
+    `aicom.elementwise_chain_fused`.
+  }];
+  let constructor = "mlir::aicom::createElementwiseChainLegalizePass()";
+  let dependentDialects = [
+    "stablehlo::StablehloDialect",
+  ];
+}
+
+def ProducerConsumerLegalize : Pass<"producer-consumer-legalize", "func::FuncOp"> {
+  let summary = "Annotate producer-consumer fusion (GEMM → softmax exp)";
+  let description = [{
+    Recognizes `stablehlo.exponential` whose operand is `subtract` from a
+    `dot_general` score tensor (softmax decomposition) and annotates the exp
+    with `aicom.producer_consumer_fused`.
+  }];
+  let constructor = "mlir::aicom::createProducerConsumerLegalizePass()";
+  let dependentDialects = [
+    "stablehlo::StablehloDialect",
+  ];
+}
+
+def LayoutBridgeLegalize : Pass<"layout-bridge-legalize", "func::FuncOp"> {
+  let summary = "Annotate NCHW conv + NHWC transpose layout fold boundary";
+  let description = [{
+    Teaching pass aligned with P5b: matches `stablehlo.transpose` with
+  permutation `[0,2,3,1]` whose operand is `stablehlo.convolution` and
+    annotates the transpose with `aicom.layout_folded` (annotation only).
+  }];
+  let constructor = "mlir::aicom::createLayoutBridgeLegalizePass()";
+  let dependentDialects = [
+    "stablehlo::StablehloDialect",
+  ];
+}
+
+def KVCacheLegalize : Pass<"kvcache-legalize", "func::FuncOp"> {
+  let summary = "Mark KV-cache role boundary on decode-step functions";
+  let description = [{
+    For `func.func` with `aicom.kv_role` of `"K"` or `"V"`, annotates
+    `aicom.kvcache_boundary` (teaching placeholder, no runtime).
+  }];
+  let constructor = "mlir::aicom::createKVCacheLegalizePass()";
+  let dependentDialects = [
+    "func::FuncDialect",
+  ];
+}
+
 def StablehloConstantFold : Pass<"stablehlo-constant-fold", "func::FuncOp"> {
   let summary = "Fold constant StableHLO elementwise add/mul at compile time";
   let description = [{

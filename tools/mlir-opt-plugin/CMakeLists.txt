@@ -10,6 +10,15 @@ set(_plugin_pass_srcs
   ${PROJECT_SOURCE_DIR}/lib/Transforms/AttentionLegalize.cpp
   ${PROJECT_SOURCE_DIR}/lib/Transforms/RoPELegalize.cpp
   ${PROJECT_SOURCE_DIR}/lib/Transforms/LayerNormLegalize.cpp
+  ${PROJECT_SOURCE_DIR}/lib/Transforms/GeluLegalize.cpp
+  ${PROJECT_SOURCE_DIR}/lib/Transforms/SwiGLULegalize.cpp
+  ${PROJECT_SOURCE_DIR}/lib/Transforms/QdqLegalize.cpp
+  ${PROJECT_SOURCE_DIR}/lib/Transforms/MatMulBiasFusion.cpp
+  ${PROJECT_SOURCE_DIR}/lib/Transforms/HorizontalGemmFusion.cpp
+  ${PROJECT_SOURCE_DIR}/lib/Transforms/ElementwiseChainLegalize.cpp
+  ${PROJECT_SOURCE_DIR}/lib/Transforms/ProducerConsumerLegalize.cpp
+  ${PROJECT_SOURCE_DIR}/lib/Transforms/LayoutBridgeLegalize.cpp
+  ${PROJECT_SOURCE_DIR}/lib/Transforms/KVCacheLegalize.cpp
 )
 
 add_library(AICompilerPlugin SHARED ${_plugin_pass_srcs})

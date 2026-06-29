@@ -1,5 +1,5 @@
 module {
-  func.func @main(%arg0: tensor<1x2x4xf32>, %arg1: tensor<1x4x2xf32>, %arg2: tensor<1x2x4xf32>) -> tensor<1x2x4xf32> {
+  func.func @inference(%arg0: tensor<1x2x4xf32>, %arg1: tensor<1x4x2xf32>, %arg2: tensor<1x2x4xf32>) -> tensor<1x2x4xf32> {
     %0 = stablehlo.constant dense<0.5> : tensor<f32>
     %1 = stablehlo.dot_general %arg0, %arg1, batching_dims = [0] x [0], contracting_dims = [2] x [1] : (tensor<1x2x4xf32>, tensor<1x4x2xf32>) -> tensor<1x2x2xf32>
     %2 = stablehlo.broadcast_in_dim %0, dims = [] : (tensor<f32>) -> tensor<1x2x2xf32>

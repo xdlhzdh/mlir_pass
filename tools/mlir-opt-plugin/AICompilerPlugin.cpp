@@ -21,6 +21,20 @@ void registerFusionPasses() {
   ::mlir::registerPass([] { return mlir::aicom::createAttentionLegalizePass(); });
   ::mlir::registerPass([] { return mlir::aicom::createRoPELegalizePass(); });
   ::mlir::registerPass([] { return mlir::aicom::createLayerNormLegalizePass(); });
+  ::mlir::registerPass([] { return mlir::aicom::createGeluLegalizePass(); });
+  ::mlir::registerPass([] { return mlir::aicom::createSwiGLULegalizePass(); });
+  ::mlir::registerPass([] { return mlir::aicom::createQdqLegalizePass(); });
+  ::mlir::registerPass([] { return mlir::aicom::createMatMulBiasFusionPass(); });
+  ::mlir::registerPass(
+      [] { return mlir::aicom::createHorizontalGemmFusionPass(); });
+  ::mlir::registerPass(
+      [] { return mlir::aicom::createElementwiseChainLegalizePass(); });
+  ::mlir::registerPass(
+      [] { return mlir::aicom::createProducerConsumerLegalizePass(); });
+  ::mlir::registerPass(
+      [] { return mlir::aicom::createLayoutBridgeLegalizePass(); });
+  ::mlir::registerPass(
+      [] { return mlir::aicom::createKVCacheLegalizePass(); });
   ::mlir::registerPass(
       [] { return mlir::aicom::createStablehloConstantFoldPass(); });
 }
@@ -47,6 +61,24 @@ void registerFusionPipeline() {
             mlir::aicom::createRoPELegalizePass());
         pm.addNestedPass<::mlir::func::FuncOp>(
             mlir::aicom::createLayerNormLegalizePass());
+        pm.addNestedPass<::mlir::func::FuncOp>(
+            mlir::aicom::createGeluLegalizePass());
+        pm.addNestedPass<::mlir::func::FuncOp>(
+            mlir::aicom::createSwiGLULegalizePass());
+        pm.addNestedPass<::mlir::func::FuncOp>(
+            mlir::aicom::createQdqLegalizePass());
+        pm.addNestedPass<::mlir::func::FuncOp>(
+            mlir::aicom::createMatMulBiasFusionPass());
+        pm.addNestedPass<::mlir::func::FuncOp>(
+            mlir::aicom::createHorizontalGemmFusionPass());
+        pm.addNestedPass<::mlir::func::FuncOp>(
+            mlir::aicom::createElementwiseChainLegalizePass());
+        pm.addNestedPass<::mlir::func::FuncOp>(
+            mlir::aicom::createProducerConsumerLegalizePass());
+        pm.addNestedPass<::mlir::func::FuncOp>(
+            mlir::aicom::createLayoutBridgeLegalizePass());
+        pm.addNestedPass<::mlir::func::FuncOp>(
+            mlir::aicom::createKVCacheLegalizePass());
         pm.addNestedPass<::mlir::func::FuncOp>(
             mlir::aicom::createStablehloConstantFoldPass());
         return ::mlir::success();

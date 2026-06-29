@@ -1,5 +1,5 @@
 module {
-  func.func @main(%arg0: tensor<2x4xf32>) -> tensor<2x4xf32> {
+  func.func @inference(%arg0: tensor<2x4xf32>) -> tensor<2x4xf32> {
     %0 = stablehlo.constant dense<[1.0, 1.0, 1.0, 1.0]> : tensor<4xf32>
     %1 = stablehlo.constant dense<[0.0, 0.0, 0.0, 0.0]> : tensor<4xf32>
     %2 = stablehlo.constant dense<1.0e-05> : tensor<f32>

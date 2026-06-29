@@ -57,6 +57,55 @@ if(FILECHECK_EXE AND LIT_EXE)
        DESTINATION "${_lit_dir}")
   file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/lit/loops_smoke.mlir"
        DESTINATION "${_lit_dir}")
+  file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/lit/gelu_legalize.mlir"
+       DESTINATION "${_lit_dir}")
+  file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/lit/canonicalize_cse_smoke.mlir"
+       DESTINATION "${_lit_dir}")
+  file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/lit/swiglu_legalize.mlir"
+       DESTINATION "${_lit_dir}")
+  file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/lit/qdq_legalize.mlir"
+       DESTINATION "${_lit_dir}")
+  file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/lit/matmul_bias_fusion.mlir"
+       DESTINATION "${_lit_dir}")
+  file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/lit/horizontal_gemm_fusion.mlir"
+       DESTINATION "${_lit_dir}")
+  file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/lit/elementwise_chain_legalize.mlir"
+       DESTINATION "${_lit_dir}")
+  file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/lit/producer_consumer_legalize.mlir"
+       DESTINATION "${_lit_dir}")
+  file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/lit/transformer_block_fusion_e2e.mlir"
+       DESTINATION "${_lit_dir}")
+  file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/lit/layout_bridge_legalize.mlir"
+       DESTINATION "${_lit_dir}")
+  file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/lit/kvcache_legalize.mlir"
+       DESTINATION "${_lit_dir}")
+  file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/lit/graph_partition_smoke.mlir"
+       DESTINATION "${_lit_dir}")
+
+  add_custom_target(test_jit_golden
+    COMMAND ${CMAKE_COMMAND} -E env "MLIR_PASS_BUILD=${CMAKE_BINARY_DIR}"
+            bash ${CMAKE_SOURCE_DIR}/scripts/run_jit_golden.sh
+    DEPENDS pipe-demo
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    COMMENT "JIT numerical golden (pipe-demo vs NumPy)")
+
+  add_custom_target(test_partition_smoke
+    COMMAND ${CMAKE_COMMAND} -E env
+            "MLIR_COMPILER_BUILD=${CMAKE_SOURCE_DIR}/../mlir_compiler/build"
+            "MLIR_PASS_BUILD=${CMAKE_BINARY_DIR}"
+            bash ${CMAKE_SOURCE_DIR}/scripts/run_partition_smoke.sh
+    DEPENDS pipe-demo
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    COMMENT "P13 graph partition demo + mlir_pass partition smoke")
+
+  add_custom_target(test_layout_e2e
+    COMMAND ${CMAKE_COMMAND} -E env
+            "MLIR_COMPILER_BUILD=${CMAKE_SOURCE_DIR}/../mlir_compiler/build"
+            "MLIR_PASS_BUILD=${CMAKE_BINARY_DIR}"
+            bash ${CMAKE_SOURCE_DIR}/scripts/run_layout_e2e.sh
+    DEPENDS pipe-demo
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    COMMENT "Layout conv P4 export -> mlir_pass layout-bridge e2e")
 
   add_custom_target(test_attention_e2e
     COMMAND ${CMAKE_COMMAND} -E env
@@ -75,6 +124,24 @@ if(FILECHECK_EXE AND LIT_EXE)
     DEPENDS pipe-demo
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
     COMMENT "Cross-repo Transformer ONNX->StableHLO->mlir_pass fusion e2e")
+
+  add_custom_target(test_quant_e2e
+    COMMAND ${CMAKE_COMMAND} -E env
+            "MLIR_COMPILER_BUILD=${CMAKE_SOURCE_DIR}/../mlir_compiler/build"
+            "MLIR_PASS_BUILD=${CMAKE_BINARY_DIR}"
+            bash ${CMAKE_SOURCE_DIR}/scripts/run_quant_e2e.sh
+    DEPENDS pipe-demo
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    COMMENT "Q/DQ MatMul LIT + P4 export -> mlir_pass qdq-legalize e2e")
+
+  add_custom_target(test_dynamic_e2e
+    COMMAND ${CMAKE_COMMAND} -E env
+            "MLIR_COMPILER_BUILD=${CMAKE_SOURCE_DIR}/../mlir_compiler/build"
+            "MLIR_PASS_BUILD=${CMAKE_BINARY_DIR}"
+            bash ${CMAKE_SOURCE_DIR}/scripts/run_dynamic_e2e.sh
+    DEPENDS pipe-demo
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    COMMENT "Dynamic batch P4 export -> mlir_pass fusion/linalg e2e")
 
   add_custom_target(test_lit_filecheck
     COMMAND ${CMAKE_COMMAND} -E env "LIT_EXE=${LIT_EXE}" "FILECHECK_EXE=${FILECHECK_EXE}"

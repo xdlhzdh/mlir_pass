@@ -36,6 +36,7 @@ run_case() {
 
   echo "== Export P4 ${name} ONNX -> StableHLO MLIR =="
   "$L3" --mlir-only "$onnx" > "$fixture"
+  sed -i 's/@main/@inference/' "$fixture"
 
   echo "== mlir_pass fusion on exported ${name} graph =="
   local out
@@ -70,4 +71,31 @@ run_case layernorm "$MODEL_DIR/lowering_layernorm.onnx" \
   'stablehlo.subtract' \
   'aicom.layernorm_canonicalized'
 
-echo "Transformer (softmax/attention/rmsnorm/rope/layernorm) cross-repo e2e passed."
+run_case gelu "$MODEL_DIR/lowering_gelu.onnx" \
+  'chlo.erf' \
+  'aicom.gelu_canonicalized'
+
+run_case swiglu "$MODEL_DIR/lowering_swiglu.onnx" \
+  'stablehlo.negate' \
+  'aicom.swiglu_canonicalized'
+
+run_case matmul_bias "$MODEL_DIR/lowering_matmul_bias.onnx" \
+  'stablehlo.dot_general' \
+  'aicom.matmul_bias_fused'
+
+run_case matmul_softmax "$MODEL_DIR/lowering_matmul_softmax.onnx" \
+  'stablehlo.dot_general' \
+  'aicom.producer_consumer_fused' \
+  'aicom.softmax_canonicalized'
+
+run_case horizontal_gemm "$MODEL_DIR/lowering_horizontal_gemm.onnx" \
+  'stablehlo.dot_general' \
+  'stablehlo.concatenate' \
+  'aicom.horizontal_gemm_fused'
+
+run_case transformer_block "$MODEL_DIR/lowering_transformer_block.onnx" \
+  'aicom.rmsnorm_canonicalized' \
+  'aicom.scaled_dot_product_attention' \
+  'aicom.swiglu_canonicalized'
+
+echo "Transformer + GEMM opt (matmul_bias/horizontal_gemm/transformer_block) cross-repo e2e passed."

@@ -27,6 +27,7 @@ fi
 mkdir -p "$(dirname "$FIXTURE")"
 echo "== Export P4 attention ONNX -> StableHLO MLIR =="
 "$L3" --mlir-only "$ONNX" > "$FIXTURE"
+sed -i 's/@main/@inference/' "$FIXTURE"
 
 echo "== mlir_pass fusion on exported attention graph =="
 out="$("$DEMO" --input="$FIXTURE" --pipeline-stop-after=fusion 2>&1)"

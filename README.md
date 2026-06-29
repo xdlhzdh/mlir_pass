@@ -1,6 +1,6 @@
 # MLIR AI Compiler Pipeline Demo
 
-将 StableHLO 子图经 **Linalg → Bufferize → Loops/Affine/Vector → LLVM** 降至 LLVM Dialect 的 C++ 演示工程：官方 MLIR Pass + **15 个自定义 teaching pass**，支持 JIT、mlir-opt plugin、跨仓库 Transformer 五件套 e2e 与分阶段 LIT 回归。
+将 StableHLO 子图经 **Linalg → Bufferize → Loops/Affine/Vector → LLVM** 降至 LLVM Dialect 的 C++ 演示工程：官方 MLIR Pass + **24 个自定义 teaching pass**，支持 JIT 数值 golden、mlir-opt plugin、跨仓库 Transformer / 动态 batch / Q/DQ / Layout e2e 与分阶段 LIT 回归。
 
 - 概念对齐：[`mlir_compiler`](../mlir_compiler/src/mlir/README.md) P5–P9  
 - 环境安装：[`mlir_compiler` cpu README](../mlir_compiler/src/mlir/cpu/README.md) §1.2–§1.5  
@@ -77,7 +77,11 @@ ninja -C build
 | Shell regression | `bash scripts/test_shell_regression.sh` | `ninja -C build test_shell_regression` | 用 Bash + `grep` 断言 pipeline、fusion、stop-after、JIT 正确 |
 | LIT/FileCheck | `bash scripts/test_lit_filecheck.sh` | `ninja -C build test_lit_filecheck` | 只执行 `test/lit/*.mlir` 的 FileCheck 用例 |
 | Attention 跨仓库 e2e | `bash scripts/run_attention_e2e.sh` | `ninja -C build test_attention_e2e` | `mlir_compiler` P4 Attention ONNX → StableHLO → fusion |
-| Transformer 跨仓库 e2e | `bash scripts/run_transformer_e2e.sh` | `ninja -C build test_transformer_e2e` | Attention + RMSNorm + RoPE 三件套 ONNX → StableHLO → fusion |
+| Transformer 跨仓库 e2e | `bash scripts/run_transformer_e2e.sh` | `ninja -C build test_transformer_e2e` | 11 fixture：七件套 + matmul_bias/softmax/horizontal_gemm/transformer_block |
+| 动态 batch e2e | `bash scripts/run_dynamic_e2e.sh` | `ninja -C build test_dynamic_e2e` | P4 `lowering_dynamic.onnx` → fusion + linalg |
+| Layout e2e | `bash scripts/run_layout_e2e.sh` | `ninja -C build test_layout_e2e` | P4 `lowering_layout_conv.onnx` → `layout-bridge-legalize` |
+| JIT 数值 golden | `bash scripts/run_jit_golden.sh` | `ninja -C build test_jit_golden` | `pipe-demo --jit` vs NumPy（`matmul_add` / `jit_scale`） |
+| Graph partition smoke | `bash scripts/run_partition_smoke.sh` | `ninja -C build test_partition_smoke` | P13 demo + `graph_partition_smoke.mlir` |
 | mlir-opt plugin | `build/tools/mlir-opt-plugin/run_aicom_mlir_opt.sh` | `ninja -C build test_mlir_opt_plugin` | 用 `aicom-fusion` pipeline 跑 fusion passes |
 | 全量测试 | `bash scripts/test_all.sh` | `ninja -C build test_all` | 先 Shell regression，再 LIT/FileCheck |
 | IR 落盘 Demo | `bash scripts/run_pipeline_demo.sh` | `ninja -C build run_pipeline_demo` | 生成各 stage IR 与 pass trace 到 `output/pipeline-dumps/latest/` |
@@ -94,8 +98,13 @@ ninja -C build test_shell_regression
 完整验证与演示工作流：
 
 ```bash
-ninja -C build test_shell_regression   # Shell regression（19 项）
-ninja -C build test_lit_filecheck      # LIT/FileCheck（19 项，需 lit + FileCheck）
+ninja -C build test_shell_regression   # Shell regression（28 项）
+ninja -C build test_lit_filecheck      # LIT/FileCheck（31 项，需 lit + FileCheck）
+ninja -C build test_quant_e2e          # Q/DQ MatMul 标注 + P4/P11 跨仓库 e2e
+ninja -C build test_dynamic_e2e        # 动态 batch 跨仓库 e2e
+ninja -C build test_jit_golden         # JIT 数值 golden
+ninja -C build test_layout_e2e         # NCHW→NHWC layout 跨仓库 e2e
+ninja -C build test_partition_smoke    # P13 图切分 + partition fixture
 ninja -C build test_mlir_opt_plugin    # mlir-opt + AICompilerPlugin
 ninja -C build test_attention_e2e      # 跨仓库 Attention ONNX→StableHLO→fusion
 ninja -C build test_transformer_e2e    # 跨仓库 Transformer 三件套 e2e
@@ -321,7 +330,7 @@ pipe-demo --input=test/matmul_add.mlir --jit --loop-mode=scf-seq
 
 | Stage | 停止参数 | 主要 IR 变化 | 自定义 pass |
 |-------|----------|--------------|-------------|
-| 1 fusion | `--pipeline-stop-after=fusion` | StableHLO 图优化：Conv+BN 融合、ReLU→clamp、Transformer 五子图标注、常量折叠 | 8 个 fusion pass（含 `layernorm-legalize`） |
+| 1 fusion | `--pipeline-stop-after=fusion` | StableHLO 图优化：Conv+BN 融合、ReLU→clamp、Transformer/FFN 子图标注、Q/DQ 标注、布局/KVCache 标注、常量折叠 | 17 个 fusion pass |
 | 2 linalg | `--pipeline-stop-after=linalg` | StableHLO tensor ops → Linalg tensor ops | `custom-linalg-opt` |
 | 3 bufferize | `--pipeline-stop-after=bufferize` | tensor → memref，插入 buffer 管理 | `custom-buffer-opt` |
 | 4 loops | `--pipeline-stop-after=loops` | Linalg/memref → SCF → CF（`scf-seq` / `scf-par`） | `custom-loop-tiling` 或 `custom-linalg-to-parallel-loops` |
@@ -341,6 +350,15 @@ pipe-demo --input=test/matmul_add.mlir --jit --loop-mode=scf-seq
 | `attention-legalize` | fusion | `lib/Transforms/AttentionLegalize.cpp` | 在 softmax 标注后的两连 `dot_general` 子图上标注 `aicom.scaled_dot_product_attention` |
 | `rope-legalize` | fusion | `lib/Transforms/RoPELegalize.cpp` | 识别 RoPE 分解链，标注 `aicom.rope_canonicalized` |
 | `layernorm-legalize` | fusion | `lib/Transforms/LayerNormLegalize.cpp` | 识别 LayerNorm 分解链，标注 `aicom.layernorm_canonicalized` |
+| `gelu-legalize` | fusion | `lib/Transforms/GeluLegalize.cpp` | 识别 GELU 分解链，标注 `aicom.gelu_canonicalized` |
+| `swiglu-legalize` | fusion | `lib/Transforms/SwiGLULegalize.cpp` | 识别 `silu(gate)*up` 分解链，标注 `aicom.swiglu_canonicalized` |
+| `qdq-legalize` | fusion | `lib/Transforms/QdqLegalize.cpp` | 识别双端 dequant + MatMul，标注 `aicom.qdq_matmul_canonicalized` |
+| `matmul-bias-fusion` | fusion | `lib/Transforms/MatMulBiasFusion.cpp` | 识别 `dot_general` + 常量 bias `add`，标注 `aicom.matmul_bias_fused` |
+| `horizontal-gemm-fusion` | fusion | `lib/Transforms/HorizontalGemmFusion.cpp` | 识别共享 LHS 双 GEMM + 末维 concat，标注 `aicom.horizontal_gemm_fused` |
+| `elementwise-chain-legalize` | fusion | `lib/Transforms/ElementwiseChainLegalize.cpp` | 识别 add/mul → ReLU 链，标注 `aicom.elementwise_chain_fused` |
+| `producer-consumer-legalize` | fusion | `lib/Transforms/ProducerConsumerLegalize.cpp` | 识别 GEMM scores → softmax `exp` 链，标注 `aicom.producer_consumer_fused` |
+| `layout-bridge-legalize` | fusion | `lib/Transforms/LayoutBridgeLegalize.cpp` | 识别 Conv + NCHW→NHWC transpose，标注 `aicom.layout_folded` |
+| `kvcache-legalize` | fusion | `lib/Transforms/KVCacheLegalize.cpp` | 对 `aicom.kv_role` 为 K/V 的 decode 函数标注 `aicom.kvcache_boundary` |
 | `custom-linalg-opt` | linalg | `lib/Transforms/CustomLinalgOpt.cpp` | 对常量输入的 elementwise `linalg.generic` 做编译期折叠 |
 | `custom-buffer-opt` | bufferize | `lib/Transforms/CustomBufferOpt.cpp` | 将小的 `memref.alloc` 提升为 `alloca`，但跳过 return buffer |
 | `custom-loop-tiling` | loops / `scf-seq` | `lib/Transforms/CustomLoopTiling.cpp` | 对 `scf.for` 做 strip-mining，跳过带 `iter_args` 的循环 |
@@ -387,7 +405,7 @@ pipe-demo --input=test/matmul_add.mlir --jit --loop-mode=scf-seq
 
 | Stage | Pass 顺序 |
 |-------|-----------|
-| fusion | `conv-bn-fusion` → `conv-bn-relu-fusion` → `softmax-legalize` → `rmsnorm-legalize` → `attention-legalize` → `rope-legalize` → `layernorm-legalize` → `stablehlo-constant-fold` |
+| fusion | `conv-bn-fusion` → … → `horizontal-gemm-fusion` → `elementwise-chain-legalize` → `producer-consumer-legalize` → `layout-bridge-legalize` → `kvcache-legalize` → `stablehlo-constant-fold` |
 | linalg | `stablehlo-legalize-to-linalg` → `canonicalize` / `cse` → `linalg-fuse-elementwise-ops` → `linalg-fold-unit-extent-dims` → `custom-linalg-opt` → `canonicalize` / `cse` |
 | bufferize | `one-shot-bufferize` → `buffer-deallocation-pipeline` → `custom-buffer-opt` → `canonicalize` / `cse` |
 | loops / `scf-seq` | `convert-bufferization-to-memref` → `convert-linalg-to-loops` → `custom-loop-tiling` → `convert-scf-to-cf` |
@@ -396,7 +414,7 @@ pipe-demo --input=test/matmul_add.mlir --jit --loop-mode=scf-seq
 | vector | `convert-bufferization-to-memref` → `convert-linalg-to-affine-loops` → `affine-super-vectorize` → `custom-vector-opt` → [`lower-affine` → `convert-scf-to-cf`] |
 | llvm | arith/cf/func/index/math lowering → [`convert-vector-to-llvm` if vector path] → `finalize-memref-to-llvm` → `reconcile-unrealized-casts` → `custom-llvm-cleanup` |
 
-本仓库提供 `AICompilerPlugin`，可将 fusion stage 的 **8** 个 pass 以 mlir-opt plugin 形式加载：
+本仓库提供 `AICompilerPlugin`，可将 fusion stage 的 **17** 个 pass 以 mlir-opt plugin 形式加载：
 
 ```bash
 ninja -C build AICompilerPlugin test_mlir_opt_plugin

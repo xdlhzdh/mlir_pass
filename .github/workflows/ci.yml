@@ -1,0 +1,98 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+jobs:
+  mlir-compiler-smoke:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: mlir_pass
+
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/mlir_compiler
+          path: mlir_compiler
+        continue-on-error: true
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential cmake ninja-build llvm-22-tools \
+            libprotobuf-dev protobuf-compiler \
+            python3 python3-pip python3-onnxruntime
+          python3 -m pip install --user numpy onnx
+
+      - name: Build sibling mlir_compiler (golden smoke)
+        if: hashFiles('mlir_compiler/CMakeLists.txt') != ''
+        working-directory: mlir_compiler
+        run: |
+          cmake -B build -G Ninja
+          cmake --build build -j$(nproc) --target gen_lowering_models gen_quant_models run_golden
+
+  mlir-pass-full:
+    runs-on: ubuntu-22.04
+    needs: mlir-compiler-smoke
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: mlir_pass
+
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/mlir_compiler
+          path: mlir_compiler
+        continue-on-error: true
+
+      - name: Install tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential cmake ninja-build llvm-22-tools \
+            python3 python3-pip python3-numpy
+          echo "/usr/lib/llvm-22/bin" >> "$GITHUB_PATH"
+
+      - name: Check preinstalled MLIR (/usr/local)
+        id: mlir
+        run: |
+          if test -f /usr/local/lib/cmake/mlir/MLIRConfig.cmake; then
+            echo "found=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "MLIR not found at /usr/local — skipping mlir_pass build (see README)."
+            echo "found=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build mlir_compiler fixtures
+        if: steps.mlir.outputs.found == 'true' && hashFiles('mlir_compiler/CMakeLists.txt') != ''
+        working-directory: mlir_compiler
+        run: |
+          cmake -B build -G Ninja
+          cmake --build build --target gen_lowering_models gen_quant_models
+
+      - name: Build mlir_pass
+        if: steps.mlir.outputs.found == 'true'
+        working-directory: mlir_pass
+        env:
+          CC: gcc
+          CXX: g++
+        run: |
+          cmake -B build -G Ninja \
+            -DCMAKE_PREFIX_PATH=/usr/local \
+            -DSTABLEHLO_LIB_DIR=/usr/local/lib
+          cmake --build build -j$(nproc)
+
+      - name: Regression tests
+        if: steps.mlir.outputs.found == 'true'
+        working-directory: mlir_pass
+        run: |
+          cmake --build build --target \
+            test_shell_regression test_lit_filecheck \
+            test_transformer_e2e test_quant_e2e test_dynamic_e2e \
+            test_jit_golden test_mlir_opt_plugin test_layout_e2e \
+            test_partition_smoke

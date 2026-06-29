@@ -76,6 +76,51 @@ ln_out="$("${DEMO}" --input="${ROOT}/test/lit/layernorm_legalize.mlir" \
   --pipeline-stop-after=fusion 2>&1)"
 grep -q 'aicom.layernorm_canonicalized' <<<"${ln_out}"
 
+echo "== fusion stage: gelu_legalize.mlir → GELU multiply annotated =="
+gelu_out="$("${DEMO}" --input="${ROOT}/test/lit/gelu_legalize.mlir" \
+  --pipeline-stop-after=fusion 2>&1)"
+grep -q 'aicom.gelu_canonicalized' <<<"${gelu_out}"
+
+echo "== fusion stage: swiglu_legalize.mlir → SwiGLU multiply annotated =="
+swiglu_out="$("${DEMO}" --input="${ROOT}/test/lit/swiglu_legalize.mlir" \
+  --pipeline-stop-after=fusion 2>&1)"
+grep -q 'aicom.swiglu_canonicalized' <<<"${swiglu_out}"
+
+echo "== fusion stage: qdq_legalize.mlir → Q/DQ MatMul annotated =="
+qdq_out="$("${DEMO}" --input="${ROOT}/test/lit/qdq_legalize.mlir" \
+  --pipeline-stop-after=fusion 2>&1)"
+grep -q 'aicom.qdq_matmul_canonicalized' <<<"${qdq_out}"
+
+echo "== fusion stage: matmul_bias_fusion.mlir → MatMul+Bias annotated =="
+mm_bias_out="$("${DEMO}" --input="${ROOT}/test/lit/matmul_bias_fusion.mlir" \
+  --pipeline-stop-after=fusion 2>&1)"
+grep -q 'aicom.matmul_bias_fused' <<<"${mm_bias_out}"
+
+echo "== fusion stage: horizontal_gemm_fusion.mlir → horizontal GEMM annotated =="
+hg_out="$("${DEMO}" --input="${ROOT}/test/lit/horizontal_gemm_fusion.mlir" \
+  --pipeline-stop-after=fusion 2>&1)"
+grep -q 'aicom.horizontal_gemm_fused' <<<"${hg_out}"
+
+echo "== fusion stage: elementwise_chain_legalize.mlir → elementwise_chain_fused =="
+ew_out="$("${DEMO}" --input="${ROOT}/test/lit/elementwise_chain_legalize.mlir" \
+  --pipeline-stop-after=fusion 2>&1)"
+grep -q 'aicom.elementwise_chain_fused' <<<"${ew_out}"
+
+echo "== fusion stage: producer_consumer_legalize.mlir → producer_consumer_fused =="
+pc_out="$("${DEMO}" --input="${ROOT}/test/lit/producer_consumer_legalize.mlir" \
+  --pipeline-stop-after=fusion 2>&1)"
+grep -q 'aicom.producer_consumer_fused' <<<"${pc_out}"
+
+echo "== fusion stage: layout_bridge_legalize.mlir → layout_folded =="
+layout_out="$("${DEMO}" --input="${ROOT}/test/lit/layout_bridge_legalize.mlir" \
+  --pipeline-stop-after=fusion 2>&1)"
+grep -q 'aicom.layout_folded' <<<"${layout_out}"
+
+echo "== fusion stage: kvcache_legalize.mlir → kvcache_boundary =="
+kv_out="$("${DEMO}" --input="${ROOT}/test/lit/kvcache_legalize.mlir" \
+  --pipeline-stop-after=fusion 2>&1)"
+grep -q 'aicom.kvcache_boundary' <<<"${kv_out}"
+
 echo "== fusion stage: constant_fold.mlir → add/mul folded to constant =="
 fold_out="$("${DEMO}" --input="${ROOT}/test/lit/constant_fold.mlir" \
   --pipeline-stop-after=fusion 2>&1)"
