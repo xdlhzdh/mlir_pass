@@ -1,6 +1,7 @@
 // RUN: %pipe-demo --input=%s --pipeline-stop-after=fusion 2>&1 | FileCheck %s
-// CHECK: stablehlo.maximum
+// CHECK: stablehlo.clamp
 // CHECK-SAME: aicom.elementwise_chain_fused
+// CHECK-NOT: stablehlo.maximum
 
 module {
   func.func @inference() -> tensor<2x2xf32> {

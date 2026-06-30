@@ -33,7 +33,7 @@ jobs:
         working-directory: mlir_compiler
         run: |
           cmake -B build -G Ninja
-          cmake --build build -j$(nproc) --target gen_lowering_models gen_quant_models run_golden
+          cmake --build build -j$(nproc) --target gen_lowering_models gen_quant_models run_golden run_calib_to_quant
 
   mlir-pass-full:
     runs-on: ubuntu-22.04
@@ -94,5 +94,6 @@ jobs:
           cmake --build build --target \
             test_shell_regression test_lit_filecheck \
             test_transformer_e2e test_quant_e2e test_dynamic_e2e \
+            test_kvcache_e2e test_torch_e2e \
             test_jit_golden test_mlir_opt_plugin test_layout_e2e \
             test_partition_smoke

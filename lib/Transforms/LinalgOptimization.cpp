@@ -13,10 +13,12 @@ namespace aicom {
 void buildLinalgOptimizationStage(OpPassManager &pm) {
   pm.addNestedPass<func::FuncOp>(createLinalgElementwiseOpFusionPass());
   pm.addNestedPass<func::FuncOp>(createLinalgFoldUnitExtentDimsPass());
-  // Custom teaching pass (see CustomLinalgOpt.cpp, Passes.td: custom-linalg-opt).
   pm.addNestedPass<func::FuncOp>(createCustomLinalgOptPass());
   pm.addNestedPass<func::FuncOp>(createCanonicalizerPass());
   pm.addPass(createCSEPass());
+  // CSE runs before tile so it does not fold the tensor tile nest away.
+  pm.addNestedPass<func::FuncOp>(createCustomLinalgTilePass());
+  // No second linalg-fuse-elementwise-ops here: upstream pass collapses tiled nests.
 }
 
 } // namespace aicom

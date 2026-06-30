@@ -81,6 +81,22 @@ if(FILECHECK_EXE AND LIT_EXE)
        DESTINATION "${_lit_dir}")
   file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/lit/graph_partition_smoke.mlir"
        DESTINATION "${_lit_dir}")
+  file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/lit/broadcast_simplify.mlir"
+       DESTINATION "${_lit_dir}")
+  file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/lit/gelu_linalg_smoke.mlir"
+       DESTINATION "${_lit_dir}")
+  file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/lit/shape_refine_batch.mlir"
+       DESTINATION "${_lit_dir}")
+  file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/lit/linalg_tile_smoke.mlir"
+       DESTINATION "${_lit_dir}")
+  file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/lit/shape_get_dimension_size.mlir"
+       DESTINATION "${_lit_dir}")
+  file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/lit/linalg_tile_fuse_smoke.mlir"
+       DESTINATION "${_lit_dir}")
+  file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/lit/flash_attention_tile.mlir"
+       DESTINATION "${_lit_dir}")
+  file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/lit/decode_loop.mlir"
+       DESTINATION "${_lit_dir}")
 
   add_custom_target(test_jit_golden
     COMMAND ${CMAKE_COMMAND} -E env "MLIR_PASS_BUILD=${CMAKE_BINARY_DIR}"
@@ -142,6 +158,33 @@ if(FILECHECK_EXE AND LIT_EXE)
     DEPENDS pipe-demo
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
     COMMENT "Dynamic batch P4 export -> mlir_pass fusion/linalg e2e")
+
+  add_custom_target(test_broadcast_e2e
+    COMMAND ${CMAKE_COMMAND} -E env
+            "MLIR_COMPILER_BUILD=${CMAKE_SOURCE_DIR}/../mlir_compiler/build"
+            "MLIR_PASS_BUILD=${CMAKE_BINARY_DIR}"
+            bash ${CMAKE_SOURCE_DIR}/scripts/run_broadcast_e2e.sh
+    DEPENDS pipe-demo
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    COMMENT "P4 numpy broadcast ONNX -> mlir_pass fusion/linalg e2e")
+
+  add_custom_target(test_torch_e2e
+    COMMAND ${CMAKE_COMMAND} -E env
+            "MLIR_COMPILER_BUILD=${CMAKE_SOURCE_DIR}/../mlir_compiler/build"
+            "MLIR_PASS_BUILD=${CMAKE_BINARY_DIR}"
+            bash ${CMAKE_SOURCE_DIR}/scripts/run_torch_e2e.sh
+    DEPENDS pipe-demo
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    COMMENT "torch-mlir export (or fixture) -> mlir_pass fusion e2e")
+
+  add_custom_target(test_kvcache_e2e
+    COMMAND ${CMAKE_COMMAND} -E env
+            "MLIR_COMPILER_BUILD=${CMAKE_SOURCE_DIR}/../mlir_compiler/build"
+            "MLIR_PASS_BUILD=${CMAKE_BINARY_DIR}"
+            bash ${CMAKE_SOURCE_DIR}/scripts/run_kvcache_e2e.sh
+    DEPENDS pipe-demo
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    COMMENT "P4 decode_step export -> mlir_pass fusion + P12 memplan e2e")
 
   add_custom_target(test_lit_filecheck
     COMMAND ${CMAKE_COMMAND} -E env "LIT_EXE=${LIT_EXE}" "FILECHECK_EXE=${FILECHECK_EXE}"

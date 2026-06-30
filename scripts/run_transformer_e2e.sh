@@ -42,7 +42,15 @@ run_case() {
   local out
   out="$("$DEMO" --input="$fixture" --pipeline-stop-after=fusion 2>&1)"
   for pattern in "${checks[@]}"; do
-    grep -q "$pattern" <<<"$out"
+    if [[ "$pattern" == !* ]]; then
+      local forbidden="${pattern#!}"
+      if grep -q "$forbidden" <<<"$out"; then
+        echo "error: ${name} fusion output should not contain ${forbidden}" >&2
+        exit 1
+      fi
+    else
+      grep -q "$pattern" <<<"$out"
+    fi
   done
   echo "${name} P4 -> mlir_pass fusion e2e passed."
   echo "Fixture: $fixture"
@@ -86,7 +94,8 @@ run_case matmul_bias "$MODEL_DIR/lowering_matmul_bias.onnx" \
 run_case matmul_softmax "$MODEL_DIR/lowering_matmul_softmax.onnx" \
   'stablehlo.dot_general' \
   'aicom.producer_consumer_fused' \
-  'aicom.softmax_canonicalized'
+  'aicom.softmax_canonicalized' \
+  '!stablehlo.subtract'
 
 run_case horizontal_gemm "$MODEL_DIR/lowering_horizontal_gemm.onnx" \
   'stablehlo.dot_general' \

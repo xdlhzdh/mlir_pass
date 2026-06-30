@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # Cross-repo quant smoke: P11 Q/DQ teaching fixture + P4 export -> mlir_pass qdq-legalize.
+# PTQ 完整链（校准 demo -> quant Stage 2）见 mlir_compiler run_calib_demo + run_calib_to_quant.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"

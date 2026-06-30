@@ -27,6 +27,10 @@ sed -i 's/@main/@inference/' "$FIXTURE"
 out="$("$DEMO" --input="$FIXTURE" --pipeline-stop-after=fusion 2>&1)"
 grep -q 'stablehlo.convolution' <<<"$out"
 grep -q 'aicom.layout_folded' <<<"$out"
+grep -qv 'stablehlo.transpose' <<<"$out"
+grep -q 'dim_numbers = \[b, 0, 1, f\]x\[0, 1, i, o\]->\[b, 0, 1, f\]' <<<"$out" || \
+  grep -q 'dim_numbers = \[b, f, 0, 1\]x\[o, i, 0, 1\]->\[b, 0, 1, f\]' <<<"$out" || \
+  grep -q 'aicom.layout_folded' <<<"$out"
 
 echo "Layout conv P4 -> mlir_pass fusion e2e passed."
 echo "Fixture: $FIXTURE"

@@ -8,6 +8,7 @@ add_library(AICompilerTransforms STATIC
   SoftmaxLegalize.cpp
   RMSNormLegalize.cpp
   AttentionLegalize.cpp
+  FlashAttentionTile.cpp
   RoPELegalize.cpp
   LayerNormLegalize.cpp
   GeluLegalize.cpp
@@ -18,9 +19,12 @@ add_library(AICompilerTransforms STATIC
   ElementwiseChainLegalize.cpp
   ProducerConsumerLegalize.cpp
   LayoutBridgeLegalize.cpp
+  LayoutFold.cpp
   KVCacheLegalize.cpp
+  BroadcastSimplify.cpp
   StablehloConstantFold.cpp
   CustomLinalgOpt.cpp
+  CustomLinalgTile.cpp
   CustomBufferOpt.cpp
   CustomLinalgToParallelLoops.cpp
   CustomLoopTiling.cpp
@@ -53,6 +57,7 @@ target_link_libraries(AICompilerTransforms PUBLIC
   MLIRLinalgDialect
   MLIRLinalgDialect
   MLIRLinalgTransforms
+  MLIRLinalgUtils
   MLIRLLVMDialect
   MLIRMemRefDialect
   MLIRPass

@@ -19,6 +19,7 @@ void registerFusionPasses() {
   ::mlir::registerPass([] { return mlir::aicom::createSoftmaxLegalizePass(); });
   ::mlir::registerPass([] { return mlir::aicom::createRMSNormLegalizePass(); });
   ::mlir::registerPass([] { return mlir::aicom::createAttentionLegalizePass(); });
+  ::mlir::registerPass([] { return mlir::aicom::createFlashAttentionTilePass(); });
   ::mlir::registerPass([] { return mlir::aicom::createRoPELegalizePass(); });
   ::mlir::registerPass([] { return mlir::aicom::createLayerNormLegalizePass(); });
   ::mlir::registerPass([] { return mlir::aicom::createGeluLegalizePass(); });
@@ -35,6 +36,8 @@ void registerFusionPasses() {
       [] { return mlir::aicom::createLayoutBridgeLegalizePass(); });
   ::mlir::registerPass(
       [] { return mlir::aicom::createKVCacheLegalizePass(); });
+  ::mlir::registerPass(
+      [] { return mlir::aicom::createBroadcastSimplifyPass(); });
   ::mlir::registerPass(
       [] { return mlir::aicom::createStablehloConstantFoldPass(); });
 }
@@ -58,6 +61,8 @@ void registerFusionPipeline() {
         pm.addNestedPass<::mlir::func::FuncOp>(
             mlir::aicom::createAttentionLegalizePass());
         pm.addNestedPass<::mlir::func::FuncOp>(
+            mlir::aicom::createFlashAttentionTilePass());
+        pm.addNestedPass<::mlir::func::FuncOp>(
             mlir::aicom::createRoPELegalizePass());
         pm.addNestedPass<::mlir::func::FuncOp>(
             mlir::aicom::createLayerNormLegalizePass());
@@ -78,7 +83,11 @@ void registerFusionPipeline() {
         pm.addNestedPass<::mlir::func::FuncOp>(
             mlir::aicom::createLayoutBridgeLegalizePass());
         pm.addNestedPass<::mlir::func::FuncOp>(
+            mlir::aicom::createLayoutFoldPass());
+        pm.addNestedPass<::mlir::func::FuncOp>(
             mlir::aicom::createKVCacheLegalizePass());
+        pm.addNestedPass<::mlir::func::FuncOp>(
+            mlir::aicom::createBroadcastSimplifyPass());
         pm.addNestedPass<::mlir::func::FuncOp>(
             mlir::aicom::createStablehloConstantFoldPass());
         return ::mlir::success();

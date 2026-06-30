@@ -10,6 +10,7 @@ void registerAICompilerPasses() {
   ::mlir::registerPass([] { return mlir::aicom::createSoftmaxLegalizePass(); });
   ::mlir::registerPass([] { return mlir::aicom::createRMSNormLegalizePass(); });
   ::mlir::registerPass([] { return mlir::aicom::createAttentionLegalizePass(); });
+  ::mlir::registerPass([] { return mlir::aicom::createFlashAttentionTilePass(); });
   ::mlir::registerPass([] { return mlir::aicom::createRoPELegalizePass(); });
   ::mlir::registerPass([] { return mlir::aicom::createLayerNormLegalizePass(); });
   ::mlir::registerPass([] { return mlir::aicom::createGeluLegalizePass(); });
@@ -24,8 +25,11 @@ void registerAICompilerPasses() {
       [] { return mlir::aicom::createProducerConsumerLegalizePass(); });
   ::mlir::registerPass(
       [] { return mlir::aicom::createLayoutBridgeLegalizePass(); });
+  ::mlir::registerPass([] { return mlir::aicom::createLayoutFoldPass(); });
   ::mlir::registerPass(
       [] { return mlir::aicom::createKVCacheLegalizePass(); });
+  ::mlir::registerPass(
+      [] { return mlir::aicom::createBroadcastSimplifyPass(); });
   ::mlir::registerPass(
       [] { return mlir::aicom::createStablehloConstantFoldPass(); });
   ::mlir::registerPass([] { return mlir::aicom::createCustomLinalgOptPass(); });
@@ -74,6 +78,7 @@ void printAICompilerPassList(llvm::raw_ostream &os) {
       "softmax-legalize",                // fusion
       "rmsnorm-legalize",                // fusion
       "attention-legalize",              // fusion
+      "flash-attention-tile",            // fusion
       "rope-legalize",                   // fusion
       "layernorm-legalize",              // fusion
       "gelu-legalize",                   // fusion
@@ -84,9 +89,12 @@ void printAICompilerPassList(llvm::raw_ostream &os) {
       "elementwise-chain-legalize",      // fusion
       "producer-consumer-legalize",      // fusion
       "layout-bridge-legalize",          // fusion
+      "layout-fold",                     // fusion
       "kvcache-legalize",                // fusion
+      "broadcast-simplify",              // fusion
       "stablehlo-constant-fold",         // fusion
       "custom-linalg-opt",               // linalg
+      "custom-linalg-tile",              // linalg
       "custom-buffer-opt",               // bufferize
       "custom-loop-tiling",              // loops / scf-seq
       "custom-linalg-to-parallel-loops", // loops / scf-par
@@ -97,7 +105,8 @@ void printAICompilerPassList(llvm::raw_ostream &os) {
   static constexpr llvm::StringRef kStages[] = {
       "fusion", "fusion", "fusion", "fusion", "fusion", "fusion", "fusion",
       "fusion", "fusion", "fusion", "fusion", "fusion", "fusion", "fusion",
-      "fusion", "fusion", "linalg", "bufferize", "loops/scf-seq", "loops/scf-par",
+      "fusion", "fusion", "fusion", "fusion", "fusion", "fusion", "linalg", "linalg",
+      "bufferize", "loops/scf-seq", "loops/scf-par",
       "affine", "vector", "llvm",
   };
   static constexpr size_t kNumPasses = sizeof(kPasses) / sizeof(kPasses[0]);

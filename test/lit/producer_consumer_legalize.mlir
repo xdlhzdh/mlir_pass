@@ -1,7 +1,8 @@
 // RUN: %pipe-demo --input=%s --pipeline-stop-after=fusion 2>&1 | FileCheck %s
 // CHECK: stablehlo.dot_general
-// CHECK: stablehlo.exponential
+// CHECK: stablehlo.multiply
 // CHECK-SAME: aicom.producer_consumer_fused
+// CHECK-NOT: stablehlo.subtract
 
 module {
   func.func @inference() -> tensor<2x4xf32> {

@@ -89,6 +89,7 @@ void buildFusionStage(OpPassManager &pm) {
   pm.addNestedPass<func::FuncOp>(createSoftmaxLegalizePass());
   pm.addNestedPass<func::FuncOp>(createRMSNormLegalizePass());
   pm.addNestedPass<func::FuncOp>(createAttentionLegalizePass());
+  pm.addNestedPass<func::FuncOp>(createFlashAttentionTilePass());
   pm.addNestedPass<func::FuncOp>(createRoPELegalizePass());
   pm.addNestedPass<func::FuncOp>(createLayerNormLegalizePass());
   pm.addNestedPass<func::FuncOp>(createGeluLegalizePass());
@@ -99,7 +100,9 @@ void buildFusionStage(OpPassManager &pm) {
   pm.addNestedPass<func::FuncOp>(createElementwiseChainLegalizePass());
   pm.addNestedPass<func::FuncOp>(createProducerConsumerLegalizePass());
   pm.addNestedPass<func::FuncOp>(createLayoutBridgeLegalizePass());
+  pm.addNestedPass<func::FuncOp>(createLayoutFoldPass());
   pm.addNestedPass<func::FuncOp>(createKVCacheLegalizePass());
+  pm.addNestedPass<func::FuncOp>(createBroadcastSimplifyPass());
   pm.addNestedPass<func::FuncOp>(createStablehloConstantFoldPass());
 }
 

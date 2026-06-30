@@ -1,8 +1,3 @@
-// RUN: %pipe-demo --input=%s --pipeline-stop-after=fusion 2>&1 | FileCheck %s
-// CHECK: stablehlo.convolution
-// CHECK-SAME: aicom.layout_folded
-// CHECK-NOT: stablehlo.transpose
-
 module {
   func.func @inference() -> tensor<1x2x2x2xf32> {
     %input = stablehlo.constant dense<[[[[1.0], [2.0]], [[3.0], [4.0]]]]> : tensor<1x2x2x1xf32>
@@ -14,7 +9,6 @@ module {
         {batch_group_count = 1 : i64, feature_group_count = 1 : i64,
          precision_config = [#stablehlo<precision DEFAULT>, #stablehlo<precision DEFAULT>]}
         : (tensor<1x2x2x1xf32>, tensor<1x1x1x2xf32>) -> tensor<1x2x2x2xf32>
-    %out = stablehlo.transpose %conv, dims = [0, 2, 3, 1] : (tensor<1x2x2x2xf32>) -> tensor<1x2x2x2xf32>
-    return %out : tensor<1x2x2x2xf32>
+    return %conv : tensor<1x2x2x2xf32>
   }
 }

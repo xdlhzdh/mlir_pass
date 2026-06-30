@@ -1,6 +1,8 @@
 # MLIR AI Compiler Pipeline Demo
 
-将 StableHLO 子图经 **Linalg → Bufferize → Loops/Affine/Vector → LLVM** 降至 LLVM Dialect 的 C++ 演示工程：官方 MLIR Pass + **24 个自定义 teaching pass**，支持 JIT 数值 golden、mlir-opt plugin、跨仓库 Transformer / 动态 batch / Q/DQ / Layout e2e 与分阶段 LIT 回归。
+将 StableHLO 子图经 **Linalg → Bufferize → Loops/Affine/Vector → LLVM** 降至 LLVM Dialect 的 C++ 演示工程：官方 MLIR Pass + **28 个自定义 teaching pass**，支持 JIT 数值 golden、mlir-opt plugin、跨仓库 Transformer / 动态 batch / Q/DQ / Layout / Broadcast / torch / KV decode e2e 与分阶段 LIT 回归。
+
+工业级全栈能力缺口（Conv GPU JIT、QAT、分布式 runtime 等）见 [`test/模板对照-编译器项目能力映射.md`](test/模板对照-编译器项目能力映射.md) §2.2。
 
 - 概念对齐：[`mlir_compiler`](../mlir_compiler/src/mlir/README.md) P5–P9  
 - 环境安装：[`mlir_compiler` cpu README](../mlir_compiler/src/mlir/cpu/README.md) §1.2–§1.5  
@@ -78,9 +80,13 @@ ninja -C build
 | LIT/FileCheck | `bash scripts/test_lit_filecheck.sh` | `ninja -C build test_lit_filecheck` | 只执行 `test/lit/*.mlir` 的 FileCheck 用例 |
 | Attention 跨仓库 e2e | `bash scripts/run_attention_e2e.sh` | `ninja -C build test_attention_e2e` | `mlir_compiler` P4 Attention ONNX → StableHLO → fusion |
 | Transformer 跨仓库 e2e | `bash scripts/run_transformer_e2e.sh` | `ninja -C build test_transformer_e2e` | 11 fixture：七件套 + matmul_bias/softmax/horizontal_gemm/transformer_block |
+| Quant 跨仓库 e2e | `bash scripts/run_quant_e2e.sh` | `ninja -C build test_quant_e2e` | Q/DQ MatMul 标注 + P4/P11 串联 |
 | 动态 batch e2e | `bash scripts/run_dynamic_e2e.sh` | `ninja -C build test_dynamic_e2e` | P4 `lowering_dynamic.onnx` → fusion + linalg |
-| Layout e2e | `bash scripts/run_layout_e2e.sh` | `ninja -C build test_layout_e2e` | P4 `lowering_layout_conv.onnx` → `layout-bridge-legalize` |
-| JIT 数值 golden | `bash scripts/run_jit_golden.sh` | `ninja -C build test_jit_golden` | `pipe-demo --jit` vs NumPy（`matmul_add` / `jit_scale`） |
+| Layout 跨仓库 e2e | `bash scripts/run_layout_e2e.sh` | `ninja -C build test_layout_e2e` | P4 layout Conv → NHWC fold |
+| Broadcast 跨仓库 e2e | `bash scripts/run_broadcast_e2e.sh` | `ninja -C build test_broadcast_e2e` | P4 `lowering_broadcast.onnx` → fusion + linalg |
+| torch 跨仓库 e2e | `bash scripts/run_torch_e2e.sh` | `ninja -C build test_torch_e2e` | torch-mlir Conv+BN 导出或 fixture → fusion |
+| JIT 数值 golden | `bash scripts/run_jit_golden.sh` | `ninja -C build test_jit_golden` | `pipe-demo --jit` vs NumPy（**6 项**：含 gelu/swiglu P4） |
+| KV decode e2e | `bash scripts/run_kvcache_e2e.sh` | `ninja -C build test_kvcache_e2e` | P4 decode_step → fusion + P12 memplan |
 | Graph partition smoke | `bash scripts/run_partition_smoke.sh` | `ninja -C build test_partition_smoke` | P13 demo + `graph_partition_smoke.mlir` |
 | mlir-opt plugin | `build/tools/mlir-opt-plugin/run_aicom_mlir_opt.sh` | `ninja -C build test_mlir_opt_plugin` | 用 `aicom-fusion` pipeline 跑 fusion passes |
 | 全量测试 | `bash scripts/test_all.sh` | `ninja -C build test_all` | 先 Shell regression，再 LIT/FileCheck |
@@ -98,16 +104,19 @@ ninja -C build test_shell_regression
 完整验证与演示工作流：
 
 ```bash
-ninja -C build test_shell_regression   # Shell regression（28 项）
-ninja -C build test_lit_filecheck      # LIT/FileCheck（31 项，需 lit + FileCheck）
+ninja -C build test_shell_regression   # Shell regression（36 项）
+ninja -C build test_lit_filecheck      # LIT/FileCheck（39 项，需 lit + FileCheck）
 ninja -C build test_quant_e2e          # Q/DQ MatMul 标注 + P4/P11 跨仓库 e2e
-ninja -C build test_dynamic_e2e        # 动态 batch 跨仓库 e2e
+ninja -C build test_dynamic_e2e        # 动态 batch + dynamic MN 跨仓库 e2e
+ninja -C build test_kvcache_e2e        # KV decode 跨仓库 e2e
 ninja -C build test_jit_golden         # JIT 数值 golden
 ninja -C build test_layout_e2e         # NCHW→NHWC layout 跨仓库 e2e
+ninja -C build test_torch_e2e          # torch-mlir Conv+BN 跨仓库 e2e
+ninja -C build test_broadcast_e2e      # numpy broadcast 跨仓库 e2e
 ninja -C build test_partition_smoke    # P13 图切分 + partition fixture
 ninja -C build test_mlir_opt_plugin    # mlir-opt + AICompilerPlugin
 ninja -C build test_attention_e2e      # 跨仓库 Attention ONNX→StableHLO→fusion
-ninja -C build test_transformer_e2e    # 跨仓库 Transformer 三件套 e2e
+ninja -C build test_transformer_e2e    # 跨仓库 Transformer 11 fixture e2e
 ninja -C build test_all                # Shell regression + LIT/FileCheck
 ninja -C build run_pipeline_demo       # IR 落盘到 output/pipeline-dumps/latest/
 ```
@@ -330,7 +339,7 @@ pipe-demo --input=test/matmul_add.mlir --jit --loop-mode=scf-seq
 
 | Stage | 停止参数 | 主要 IR 变化 | 自定义 pass |
 |-------|----------|--------------|-------------|
-| 1 fusion | `--pipeline-stop-after=fusion` | StableHLO 图优化：Conv+BN 融合、ReLU→clamp、Transformer/FFN 子图标注、Q/DQ 标注、布局/KVCache 标注、常量折叠 | 17 个 fusion pass |
+| 1 fusion | `--pipeline-stop-after=fusion` | StableHLO 图优化：Conv+BN 融合、ReLU→clamp、Transformer/FFN 子图标注、Q/DQ 标注、布局/KVCache 标注、常量折叠 | 19 个 fusion pass |
 | 2 linalg | `--pipeline-stop-after=linalg` | StableHLO tensor ops → Linalg tensor ops | `custom-linalg-opt` |
 | 3 bufferize | `--pipeline-stop-after=bufferize` | tensor → memref，插入 buffer 管理 | `custom-buffer-opt` |
 | 4 loops | `--pipeline-stop-after=loops` | Linalg/memref → SCF → CF（`scf-seq` / `scf-par`） | `custom-loop-tiling` 或 `custom-linalg-to-parallel-loops` |
@@ -559,8 +568,8 @@ output/pipeline-dumps/latest/
 
 | mlir_compiler | mlir_pass stage | 说明 |
 |---------------|-----------------|------|
-| `6_stablehlo_passes/` | fusion | 真实 MLIR `conv-bn-fusion`（本仓库另含 `conv-bn-relu-fusion`、Transformer 四标注 pass、`stablehlo-constant-fold`） |
-| `5_onnx_to_stablehlo/` P4 tier 3 | fusion 输入 | `run_lowering_l3 --mlir-only` 导出 Attention/RMSNorm/RoPE StableHLO → `test_attention_e2e` / `test_transformer_e2e` / LIT |
+| `6_stablehlo_passes/` | fusion | 真实 MLIR `conv-bn-fusion`（本仓库另含 `conv-bn-relu-fusion`、Transformer/FFN/GEMM/QDQ/Layout/KV 标注 pass、`stablehlo-constant-fold`） |
+| `5_onnx_to_stablehlo/` P4 tier 3 | fusion 输入 | `run_lowering_l3 --mlir-only` 导出 Transformer 七件套、GEMM、QDQ、layout、decode 等 StableHLO → `test_*_e2e` / LIT |
 | `7_stablehlo_opt/` | — | 图优化概念并入 stage 2 |
 | `8_linalg_opt/` | linalg | + `custom-linalg-opt` |
 | `9_bufferize/` | bufferize | + `custom-buffer-opt` |
@@ -568,7 +577,7 @@ output/pipeline-dumps/latest/
 | `11_vector/` | vector | Vector dialect + `convert-vector-to-llvm` |
 | `12_llvm_lowering/` | llvm | 真实 LLVM + JIT |
 
-**跨仓库 e2e：** 先构建 [`mlir_compiler`](../mlir_compiler/) 的 `run_lowering_l3` 与 ONNX fixture，再在本仓库执行 `ninja -C build test_attention_e2e` 或 `test_transformer_e2e`。脚本 `scripts/run_transformer_e2e.sh` 串联 Attention / RMSNorm / RoPE 三件套 ONNX → StableHLO text → `pipe-demo --pipeline-stop-after=fusion`。
+**跨仓库 e2e：** 先构建 [`mlir_compiler`](../mlir_compiler/) 的 `run_lowering_l3` 与 ONNX fixture，再在本仓库执行 `test_transformer_e2e` / `test_quant_e2e` / `test_layout_e2e` / `test_kvcache_e2e` / `test_torch_e2e` 等 target。脚本会串联 ONNX 或 torch-mlir 导出 → StableHLO text → `pipe-demo --pipeline-stop-after=fusion/linalg` → grep/FileCheck 断言。
 
 [`mlir_compiler` gpu](../mlir_compiler/src/mlir/gpu/) 为 header-only 教学 IR（P6–P12）；本仓库为真实 `PassManager` + `AICompilerPlugin`。CPU `mlir-opt` 命令链见 [cpu README §2.5](../mlir_compiler/src/mlir/cpu/README.md)。
 

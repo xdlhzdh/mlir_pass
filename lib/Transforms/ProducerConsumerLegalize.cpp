@@ -26,6 +26,8 @@ static stablehlo::DotGeneralOp findDotGeneralProducer(Value value) {
   return {};
 }
 
+/// Fuse dot → subtract(max_broadcast) → exp by feeding exp from dot and max
+/// directly (erase subtract when it only exists for numerically-stable exp).
 struct ProducerConsumerExpPattern
     : public OpRewritePattern<stablehlo::ExpOp> {
   using OpRewritePattern::OpRewritePattern;
@@ -39,13 +41,33 @@ struct ProducerConsumerExpPattern
     if (!subOp)
       return failure();
 
-    if (!findDotGeneralProducer(subOp.getLhs()) &&
-        !findDotGeneralProducer(subOp.getRhs()))
+    Value scores;
+    Value maxBroadcast;
+    if (findDotGeneralProducer(subOp.getLhs())) {
+      scores = subOp.getLhs();
+      maxBroadcast = subOp.getRhs();
+    } else if (findDotGeneralProducer(subOp.getRhs())) {
+      scores = subOp.getRhs();
+      maxBroadcast = subOp.getLhs();
+    } else {
+      return failure();
+    }
+
+    if (!subOp->hasOneUse())
       return failure();
 
-    rewriter.modifyOpInPlace(expOp, [&] {
-      expOp->setAttr("aicom.producer_consumer_fused", rewriter.getUnitAttr());
-    });
+    // exp(scores - max) → exp(scores) * exp(-max)  (teaching graph fold).
+    Value negMax =
+        stablehlo::NegOp::create(rewriter, expOp.getLoc(), maxBroadcast);
+    Value expNeg = stablehlo::ExpOp::create(rewriter, expOp.getLoc(), negMax);
+    Value expScores =
+        stablehlo::ExpOp::create(rewriter, expOp.getLoc(), scores);
+    auto mul = stablehlo::MulOp::create(rewriter, expOp.getLoc(), expScores,
+                                        expNeg);
+    mul->setAttr("aicom.producer_consumer_fused", rewriter.getUnitAttr());
+    rewriter.replaceOp(expOp, mul.getResult());
+    if (subOp->use_empty())
+      rewriter.eraseOp(subOp);
     return success();
   }
 };

@@ -68,6 +68,19 @@ def AttentionLegalize : Pass<"attention-legalize", "func::FuncOp"> {
   ];
 }
 
+def FlashAttentionTile : Pass<"flash-attention-tile", "func::FuncOp"> {
+  let summary = "Annotate flash-style tile sizes on SDP attention (teaching)";
+  let description = [{
+    On ops already marked `aicom.scaled_dot_product_attention`, adds
+    `aicom.flash_tile` plus `aicom.flash_tile_m/n` pseudo block sizes (no GPU
+    kernel). Teaching companion to FlashAttention online softmax (Q14.2).
+  }];
+  let constructor = "mlir::aicom::createFlashAttentionTilePass()";
+  let dependentDialects = [
+    "stablehlo::StablehloDialect",
+  ];
+}
+
 def RoPELegalize : Pass<"rope-legalize", "func::FuncOp"> {
   let summary = "Canonicalize StableHLO RoPE decomposition";
   let description = [{
@@ -207,6 +220,34 @@ def KVCacheLegalize : Pass<"kvcache-legalize", "func::FuncOp"> {
   ];
 }
 
+def LayoutFold : Pass<"layout-fold", "func::FuncOp"> {
+  let summary = "Fold NCHW conv + NHWC transpose into one NHWC-output conv";
+  let description = [{
+    Teaching pass (A2): when a `stablehlo.transpose` with perm [0,2,3,1]
+    follows a `stablehlo.convolution` with constant weights, rewrites to a
+    single convolution with NHWC output dim_numbers and marks
+    `aicom.layout_folded`. Eliminates the transpose op from the graph.
+  }];
+  let constructor = "mlir::aicom::createLayoutFoldPass()";
+  let dependentDialects = [
+    "stablehlo::StablehloDialect",
+  ];
+}
+
+def BroadcastSimplify : Pass<"broadcast-simplify", "func::FuncOp"> {
+  let summary = "Fold redundant stablehlo.broadcast_in_dim chains";
+  let description = [{
+    Teaching graph-opt pass aligned with P4 tier 2 numpy-style broadcast:
+    - removes identity broadcasts (operand shape equals result shape)
+    - fuses nested `broadcast_in_dim(broadcast_in_dim(x))` into one broadcast
+    Annotates fused broadcasts with `aicom.broadcast_simplified`.
+  }];
+  let constructor = "mlir::aicom::createBroadcastSimplifyPass()";
+  let dependentDialects = [
+    "stablehlo::StablehloDialect",
+  ];
+}
+
 def StablehloConstantFold : Pass<"stablehlo-constant-fold", "func::FuncOp"> {
   let summary = "Fold constant StableHLO elementwise add/mul at compile time";
   let description = [{
@@ -231,6 +272,18 @@ def CustomLinalgOpt : Pass<"custom-linalg-opt", "func::FuncOp"> {
   let dependentDialects = [
     "linalg::LinalgDialect",
     "arith::ArithDialect",
+  ];
+}
+
+def CustomLinalgTile : Pass<"custom-linalg-tile", "func::FuncOp"> {
+  let summary = "Tile static linalg.matmul with 2x2x2 tiles (teaching)";
+  let description = [{
+    Strip-mines `linalg.matmul` on tensor operands using MLIR
+    `tileLinalgOp` and annotates the tiled op with `aicom.linalg_tiled`.
+  }];
+  let constructor = "mlir::aicom::createCustomLinalgTilePass()";
+  let dependentDialects = [
+    "linalg::LinalgDialect",
   ];
 }
 

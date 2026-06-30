@@ -101,20 +101,66 @@ hg_out="$("${DEMO}" --input="${ROOT}/test/lit/horizontal_gemm_fusion.mlir" \
   --pipeline-stop-after=fusion 2>&1)"
 grep -q 'aicom.horizontal_gemm_fused' <<<"${hg_out}"
 
-echo "== fusion stage: elementwise_chain_legalize.mlir → elementwise_chain_fused =="
+echo "== fusion stage: elementwise_chain_legalize.mlir → clamp + elementwise_chain_fused =="
 ew_out="$("${DEMO}" --input="${ROOT}/test/lit/elementwise_chain_legalize.mlir" \
   --pipeline-stop-after=fusion 2>&1)"
+grep -q 'stablehlo.clamp' <<<"${ew_out}"
 grep -q 'aicom.elementwise_chain_fused' <<<"${ew_out}"
+if grep -q 'stablehlo.maximum' <<<"${ew_out}"; then
+  echo "error: elementwise chain should fold maximum to clamp" >&2
+  exit 1
+fi
 
-echo "== fusion stage: producer_consumer_legalize.mlir → producer_consumer_fused =="
+echo "== fusion stage: producer_consumer_legalize.mlir → multiply + producer_consumer_fused =="
 pc_out="$("${DEMO}" --input="${ROOT}/test/lit/producer_consumer_legalize.mlir" \
   --pipeline-stop-after=fusion 2>&1)"
+grep -q 'stablehlo.multiply' <<<"${pc_out}"
 grep -q 'aicom.producer_consumer_fused' <<<"${pc_out}"
+if grep -q 'stablehlo.subtract' <<<"${pc_out}"; then
+  echo "error: producer-consumer should erase subtract in softmax exp path" >&2
+  exit 1
+fi
 
 echo "== fusion stage: layout_bridge_legalize.mlir → layout_folded =="
 layout_out="$("${DEMO}" --input="${ROOT}/test/lit/layout_bridge_legalize.mlir" \
   --pipeline-stop-after=fusion 2>&1)"
 grep -q 'aicom.layout_folded' <<<"${layout_out}"
+if grep -q 'stablehlo.transpose' <<<"${layout_out}"; then
+  echo "error: layout fold should remove stablehlo.transpose" >&2
+  exit 1
+fi
+
+echo "== linalg stage: shape_refine_batch.mlir → dynamic batch refined =="
+shape_out="$("${DEMO}" --input="${ROOT}/test/lit/shape_refine_batch.mlir" \
+  --pipeline-stop-after=linalg 2>&1)"
+grep -q 'tensor.cast %arg0 : tensor<?x3xf32> to tensor<2x3xf32>' <<<"${shape_out}"
+
+echo "== linalg stage: shape_get_dimension_size.mlir → batch cast refined =="
+shape_dim_out="$("${DEMO}" --input="${ROOT}/test/lit/shape_get_dimension_size.mlir" \
+  --pipeline-stop-after=linalg 2>&1)"
+grep -q 'tensor.cast %arg0 : tensor<?x3xf32> to tensor<2x3xf32>' <<<"${shape_dim_out}"
+grep -q 'linalg.matmul' <<<"${shape_dim_out}"
+
+echo "== linalg stage: linalg_tile_smoke.mlir → aicom.linalg_tiled =="
+tile_out="$("${DEMO}" --input="${ROOT}/test/lit/linalg_tile_smoke.mlir" \
+  --pipeline-stop-after=linalg 2>&1)"
+grep -q 'aicom.linalg_tiled' <<<"${tile_out}"
+
+echo "== linalg stage: linalg_tile_fuse_smoke.mlir → tile + scf.for =="
+tile_fuse_out="$("${DEMO}" --input="${ROOT}/test/lit/linalg_tile_fuse_smoke.mlir" \
+  --pipeline-stop-after=linalg 2>&1)"
+grep -q 'aicom.linalg_tiled' <<<"${tile_fuse_out}"
+grep -q 'scf.for' <<<"${tile_fuse_out}"
+
+echo "== fusion stage: flash_attention_tile.mlir → flash_tile annotated =="
+flash_out="$("${DEMO}" --input="${ROOT}/test/lit/flash_attention_tile.mlir" \
+  --pipeline-stop-after=fusion 2>&1)"
+grep -q 'aicom.flash_tile' <<<"${flash_out}"
+
+echo "== fusion stage: decode_loop.mlir → scf.while teaching loop =="
+decode_out="$("${DEMO}" --input="${ROOT}/test/lit/decode_loop.mlir" \
+  --pipeline-stop-after=fusion 2>&1)"
+grep -q 'scf.while' <<<"${decode_out}"
 
 echo "== fusion stage: kvcache_legalize.mlir → kvcache_boundary =="
 kv_out="$("${DEMO}" --input="${ROOT}/test/lit/kvcache_legalize.mlir" \
@@ -129,6 +175,17 @@ if grep -q 'stablehlo.add' <<<"${fold_out}" || grep -q 'stablehlo.multiply' <<<"
   echo "error: constant_fold.mlir should not retain stablehlo.add/multiply after fusion" >&2
   exit 1
 fi
+
+echo "== fusion stage: broadcast_simplify.mlir → identity broadcast removed =="
+bcast_out="$("${DEMO}" --input="${ROOT}/test/lit/broadcast_simplify.mlir" \
+  --pipeline-stop-after=fusion 2>&1)"
+grep -qv 'stablehlo.broadcast_in_dim' <<<"${bcast_out}"
+
+echo "== linalg stage: gelu_linalg_smoke.mlir → chlo.erf legalized to linalg =="
+gelu_linalg="$("${DEMO}" --input="${ROOT}/test/lit/gelu_linalg_smoke.mlir" \
+  --pipeline-stop-after=linalg 2>&1)"
+grep -qv 'chlo.erf' <<<"${gelu_linalg}"
+grep -q 'linalg\.' <<<"${gelu_linalg}"
 
 echo "== stop-after=fusion: mini_model.mlir → StableHLO (stablehlo.convolution), no LLVM =="
 stop_out="$("${DEMO}" --input="${ROOT}/test/mini_model.mlir" --pipeline-stop-after=fusion 2>&1)"

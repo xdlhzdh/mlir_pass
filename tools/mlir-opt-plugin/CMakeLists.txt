@@ -8,6 +8,7 @@ set(_plugin_pass_srcs
   ${PROJECT_SOURCE_DIR}/lib/Transforms/SoftmaxLegalize.cpp
   ${PROJECT_SOURCE_DIR}/lib/Transforms/RMSNormLegalize.cpp
   ${PROJECT_SOURCE_DIR}/lib/Transforms/AttentionLegalize.cpp
+  ${PROJECT_SOURCE_DIR}/lib/Transforms/FlashAttentionTile.cpp
   ${PROJECT_SOURCE_DIR}/lib/Transforms/RoPELegalize.cpp
   ${PROJECT_SOURCE_DIR}/lib/Transforms/LayerNormLegalize.cpp
   ${PROJECT_SOURCE_DIR}/lib/Transforms/GeluLegalize.cpp
@@ -18,7 +19,9 @@ set(_plugin_pass_srcs
   ${PROJECT_SOURCE_DIR}/lib/Transforms/ElementwiseChainLegalize.cpp
   ${PROJECT_SOURCE_DIR}/lib/Transforms/ProducerConsumerLegalize.cpp
   ${PROJECT_SOURCE_DIR}/lib/Transforms/LayoutBridgeLegalize.cpp
+  ${PROJECT_SOURCE_DIR}/lib/Transforms/LayoutFold.cpp
   ${PROJECT_SOURCE_DIR}/lib/Transforms/KVCacheLegalize.cpp
+  ${PROJECT_SOURCE_DIR}/lib/Transforms/BroadcastSimplify.cpp
 )
 
 add_library(AICompilerPlugin SHARED ${_plugin_pass_srcs})
