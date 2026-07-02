@@ -2,7 +2,7 @@
 
 将 StableHLO 子图经 **Linalg → Bufferize → Loops/Affine/Vector → LLVM** 降至 LLVM Dialect 的 C++ 演示工程：官方 MLIR Pass + **28 个自定义 teaching pass**，支持 JIT 数值 golden、mlir-opt plugin、跨仓库 Transformer / 动态 batch / Q/DQ / Layout / Broadcast / torch / KV decode e2e 与分阶段 LIT 回归。
 
-工业级全栈能力缺口（Conv GPU JIT、QAT、分布式 runtime 等）见 [`test/模板对照-编译器项目能力映射.md`](test/模板对照-编译器项目能力映射.md) §2.2。
+工业级全栈能力缺口（Conv GPU JIT、QAT、分布式 runtime 等）见 [`../mlir_compiler/src/mlir/gpu/docs/编译器能力映射.md`](../mlir_compiler/src/mlir/gpu/docs/编译器能力映射.md) §2.2。两仓库学习主文档见 [`../mlir_compiler/src/mlir/gpu/docs/两仓库学习路径与代码导读.md`](../mlir_compiler/src/mlir/gpu/docs/两仓库学习路径与代码导读.md)。
 
 - 概念对齐：[`mlir_compiler`](../mlir_compiler/src/mlir/README.md) P5–P9  
 - 环境安装：[`mlir_compiler` cpu README](../mlir_compiler/src/mlir/cpu/README.md) §1.2–§1.5  
