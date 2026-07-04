@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# P13 graph partition demo + mlir_pass partition-boundary fusion smoke.
+# P14 graph partition demo + mlir_pass partition-boundary fusion smoke.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -17,7 +17,7 @@ fi
 
 python3 "$ROOT/scripts/sync_partition_fixture.py"
 
-echo "== P13 run_graph_partition_demo =="
+echo "== P14 run_graph_partition_demo =="
 if [[ -x "$GPART" ]]; then
   "$GPART" | grep -q 'boundary tensors'
 fi
@@ -27,4 +27,4 @@ out="$("$DEMO" --input="$SMOKE" --pipeline-stop-after=fusion 2>&1)"
 grep -q 'aicom.partition_boundary' <<<"$out"
 grep -q 'stablehlo.dot_general' <<<"$out"
 
-echo "Graph partition smoke (P13 + mlir_pass fixture) passed."
+echo "Graph partition smoke (P14 + mlir_pass fixture) passed."

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Parse P13 graph partition stdout and verify comm-byte golden."""
+"""Parse P14 graph partition stdout and verify comm-byte golden."""
 from __future__ import annotations
 
 import re
@@ -7,7 +7,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-# P13 teaching transformer-block partition total comm bytes (fp32).
+# P14 teaching transformer-block partition total comm bytes (fp32).
 EXPECTED_COMM_BYTES = 262144
 
 
@@ -30,7 +30,7 @@ def main() -> int:
         return 1
 
     if "boundary tensors" not in out:
-        print("error: P13 output missing boundary tensors", file=sys.stderr)
+        print("error: P14 output missing boundary tensors", file=sys.stderr)
         return 1
 
     m = re.search(r"Total cross-partition comm bytes:\s*(\d+)", out)
@@ -46,7 +46,7 @@ def main() -> int:
         )
         return 1
 
-    print(f"P13 partition comm bytes: {total} (teaching graph)")
+    print(f"P14 partition comm bytes: {total} (teaching graph)")
     print("PASS sync_partition_fixture")
     return 0
 

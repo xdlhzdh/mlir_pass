@@ -170,7 +170,6 @@ if(FILECHECK_EXE AND LIT_EXE)
 
   add_custom_target(test_torch_e2e
     COMMAND ${CMAKE_COMMAND} -E env
-            "MLIR_COMPILER_BUILD=${CMAKE_SOURCE_DIR}/../mlir_compiler/build"
             "MLIR_PASS_BUILD=${CMAKE_BINARY_DIR}"
             bash ${CMAKE_SOURCE_DIR}/scripts/run_torch_e2e.sh
     DEPENDS pipe-demo

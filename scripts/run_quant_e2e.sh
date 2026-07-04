@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Cross-repo quant smoke: P11 Q/DQ teaching fixture + P4 export -> mlir_pass qdq-legalize.
+# Cross-repo quant smoke: P12 Q/DQ teaching fixture + P4 export -> mlir_pass qdq-legalize.
 # PTQ 完整链（校准 demo -> quant Stage 2）见 mlir_compiler run_calib_demo + run_calib_to_quant.
 set -euo pipefail
 
@@ -50,13 +50,13 @@ echo "Fixture: $p4_fixture"
 QUANT_ONNX="$COMPILER_BUILD/src/mlir/gpu/quant_models/quant_qdq_matmul.onnx"
 if [[ -f "$QUANT_ONNX" ]]; then
   p11_fixture="$FIXTURE_DIR/qdq_matmul_p11.mlir"
-  echo "== Export P11 quant_qdq_matmul ONNX -> StableHLO MLIR =="
+  echo "== Export P12 quant_qdq_matmul ONNX -> StableHLO MLIR =="
   "$L3" --mlir-only "$QUANT_ONNX" > "$p11_fixture"
 
-  echo "== mlir_pass fusion on exported P11 Q/DQ graph =="
+  echo "== mlir_pass fusion on exported P12 Q/DQ graph =="
   p11_out="$("$DEMO" --input="$p11_fixture" --pipeline-stop-after=fusion 2>&1)"
   grep -q 'aicom.qdq_matmul_canonicalized' <<<"$p11_out"
   grep -q 'stablehlo.dot_general' <<<"$p11_out"
-  echo "Q/DQ MatMul P11 -> P4 -> mlir_pass fusion e2e passed."
+  echo "Q/DQ MatMul P12 -> P4 -> mlir_pass fusion e2e passed."
   echo "Fixture: $p11_fixture"
 fi

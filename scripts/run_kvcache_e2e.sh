@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Cross-repo KV decode: P4 lowering_decode_step -> mlir_pass fusion + P12 memplan.
+# Cross-repo KV decode: P4 lowering_decode_step -> mlir_pass fusion + P13 memplan.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -46,9 +46,9 @@ grep -q 'stablehlo.dot_general' <<<"$out"
 grep -q 'aicom.kvcache_boundary' <<<"$out"
 
 if [[ -x "$MEMPLAN" ]]; then
-  echo "== P12 memory planning decode KV slots =="
+  echo "== P13 memory planning decode KV slots =="
   "$MEMPLAN" 2>&1 | grep -q 'decode step'
 fi
 
-echo "KV decode P4 -> mlir_pass + P12 e2e passed."
+echo "KV decode P4 -> mlir_pass + P13 e2e passed."
 echo "Fixture: $fixture"

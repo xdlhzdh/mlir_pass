@@ -117,23 +117,23 @@ Linalg (memref)
 
 See [`mlir_compiler/src/mlir/cpu/README.md`](../../../../mlir_compiler/src/mlir/cpu/README.md) §2.5 for a concrete pass order including `-convert-vector-to-llvm` alongside `-convert-scf-to-cf`.
 
-## Relation to `mlir_compiler` gpu stages (6–12)
+## Relation to `mlir_compiler` gpu stages (5–14)
 
-The sibling repo [`mlir_compiler/src/mlir/gpu/`](../../../../mlir_compiler/src/mlir/gpu/) teaches the same compiler story using **header-only IR** for stages 7–12, while **this repo (`mlir_pass`)** wires **real MLIR passes** in C++. Use the table below to navigate between them.
+The sibling repo [`mlir_compiler/src/mlir/gpu/`](../../../../mlir_compiler/src/mlir/gpu/) teaches the same compiler story using **header-only IR** for stages P5–P14, while **this repo (`mlir_pass`)** wires **real MLIR passes** in C++. Use the table below to navigate between them.
 
 | `mlir_compiler` | Directory | Teaching style | Concepts | `mlir_pass` stage | Implemented as |
 |-----------------|-----------|----------------|----------|-------------------|----------------|
-| P5 | `6_stablehlo_passes/` | Real MLIR plugin | Conv+BN `OpRewritePattern` | `fusion` | `conv-bn-fusion` |
-| P5 | `7_stablehlo_opt/` | `shlo_graph.h` | Graph opts, simplified conv+BN | — | Absorbed into Stage 2 official cleanup + Stage 1 fusion |
-| P6 | `8_linalg_opt/` | `linalg_ir.h` | Dep analysis, linalg fusion, tiling metadata | `linalg` | Official linalg passes + `custom-linalg-opt` |
-| P7 | `9_bufferize/` | `bufferize_ir.h` | OSB: alias, in-place, copies, dealloc | `bufferize` | Official bufferize + `custom-buffer-opt` |
-| P8 | `10_scf_affine/` | `scf_affine_ir.h` | Loop nest, tiling, interchange, fusion, vec prep | `loops` / `affine` | `convert-linalg-to-loops`, `custom-loop-tiling`, `convert-linalg-to-affine-loops`, `custom-affine-opt`, `scf-to-cf` |
-| P8 | `11_vector/` | `vector_ir.h` | vector.transfer, fma, contract, mask, LLVM intrinsics | `vector` | `affine-super-vectorize`, `custom-vector-opt`, `convert-vector-to-llvm` |
-| P9 | `12_llvm_lowering/` | `llvm_lowering_ir.h` | Simulated Vector→LLVM, ISel, regalloc, asm | `llvm` | Real `convert-*-to-llvm`, `custom-llvm-cleanup`, JIT |
+| P5 | (removed — was `6_stablehlo_passes/`) | Real MLIR plugin | Conv+BN `OpRewritePattern` | `fusion` | Migrated to this repo: `lib/Transforms/ConvBNFusion.cpp` (`conv-bn-fusion`) |
+| P5 | `5_stablehlo_opt/` | `shlo_graph.h` | Graph opts, simplified conv+BN | — | Absorbed into Stage 2 official cleanup + Stage 1 fusion |
+| P6 | `6_linalg_opt/` | `linalg_ir.h` | Dep analysis, linalg fusion, tiling metadata | `linalg` | Official linalg passes + `custom-linalg-opt` |
+| P7 | `7_bufferize/` | `bufferize_ir.h` | OSB: alias, in-place, copies, dealloc | `bufferize` | Official bufferize + `custom-buffer-opt` |
+| P8 | `8_scf_affine/` | `scf_affine_ir.h` | Loop nest, tiling, interchange, fusion, vec prep | `loops` / `affine` | `convert-linalg-to-loops`, `custom-loop-tiling`, `convert-linalg-to-affine-loops`, `custom-affine-opt`, `scf-to-cf` |
+| P9 | `9_vector/` | `vector_ir.h` | vector.transfer, fma, contract, mask, LLVM intrinsics | `vector` | `affine-super-vectorize`, `custom-vector-opt`, `convert-vector-to-llvm` |
+| P10 | `10_llvm_lowering/` | `llvm_lowering_ir.h` | Simulated Vector→LLVM, ISel, regalloc, asm | `llvm` | Real `convert-*-to-llvm`, `custom-llvm-cleanup`, JIT |
 
-**Reading order:** Stage 6 ↔ `mlir_pass` fusion → gpu 8–9 ↔ `mlir_pass` linalg/bufferize → gpu 10–12 concepts ↔ `mlir_pass` loops/llvm + production Affine/Vector paths in this spec §Dialect lowering.
+**Reading order:** P5 fusion ↔ `mlir_pass` fusion → gpu 6–7 ↔ `mlir_pass` linalg/bufferize → gpu 8–10 concepts ↔ `mlir_pass` loops/llvm + production Affine/Vector paths in this spec §Dialect lowering.
 
-**Style contrast:** gpu 7–12 = custom structs + printed pseudo-IR; `mlir_pass` = `PassManager` on real MLIR + optional JIT/LIT.
+**Style contrast:** gpu 5–14 = custom structs + printed pseudo-IR; `mlir_pass` = `PassManager` on real MLIR + optional JIT/LIT.
 
 For a **full real `mlir-opt` command chain** (including optional vector), see [`mlir_compiler` cpu README](../../../../mlir_compiler/src/mlir/cpu/README.md) §2.5.
 
