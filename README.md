@@ -1,6 +1,6 @@
 # MLIR AI Compiler Pipeline Demo
 
-将 StableHLO 子图经 **Linalg → Bufferize → Loops/Affine/Vector → LLVM** 降至 LLVM Dialect 的 C++ 演示工程：官方 MLIR Pass + **28 个自定义 teaching pass**，支持 JIT 数值 golden、mlir-opt plugin、跨仓库 Transformer / 动态 batch / Q/DQ / Layout / Broadcast / torch / KV decode e2e 与分阶段 LIT 回归。
+将 StableHLO 子图经 **Linalg → Bufferize → Loops/Affine/Vector → LLVM** 降至 LLVM Dialect 的 C++ 演示工程：官方 MLIR Pass + **28 个自定义 teaching pass**，支持 **JIT 数值校验**（把 `.mlir` 编译执行后和 NumPy 参考实现比对）、mlir-opt plugin、跨仓库 Transformer / 动态 batch / Q/DQ / Layout / Broadcast / torch / KV decode e2e 与分阶段 LIT 回归。
 
 工业级全栈能力缺口（Conv GPU JIT、QAT、分布式 runtime 等）见 [`../mlir_compiler/src/mlir/gpu/docs/编译器能力映射.md`](../mlir_compiler/src/mlir/gpu/docs/编译器能力映射.md) §2.2。两仓库学习主文档见 [`../mlir_compiler/src/mlir/gpu/docs/两仓库学习路径与代码导读.md`](../mlir_compiler/src/mlir/gpu/docs/两仓库学习路径与代码导读.md)。
 
@@ -76,7 +76,7 @@ ninja -C build
 | 配置与编译 | 见上方代码块 | `ninja -C build` | 生成 `build/`、编译静态库与 `pipe-demo` |
 | 编译驱动 | — | `ninja -C build pipe-demo` | 只构建驱动程序及其依赖 |
 | 运行 pipeline | `./build/tools/pipe-demo/pipe-demo --input=test/mini_model.mlir --loop-mode=scf-seq` | — | 直接运行完整 pipeline |
-| Shell regression | `bash scripts/test_shell_regression.sh` | `ninja -C build test_shell_regression` | 用 Bash + `grep` 断言 pipeline、fusion、stop-after、JIT 正确 |
+| Shell 回归 | `bash scripts/test_shell_regression.sh` | `ninja -C build test_shell_regression` | Bash + `grep` 断言 pipeline / fusion / stop-after；含 JIT **smoke**（非完整数值比对） |
 | LIT/FileCheck | `bash scripts/test_lit_filecheck.sh` | `ninja -C build test_lit_filecheck` | 只执行 `test/lit/*.mlir` 的 FileCheck 用例 |
 | Attention 跨仓库 e2e | `bash scripts/run_attention_e2e.sh` | `ninja -C build test_attention_e2e` | `mlir_compiler` P4 Attention ONNX → StableHLO → fusion |
 | Transformer 跨仓库 e2e | `bash scripts/run_transformer_e2e.sh` | `ninja -C build test_transformer_e2e` | 11 fixture：七件套 + matmul_bias/softmax/horizontal_gemm/transformer_block |
@@ -85,7 +85,7 @@ ninja -C build
 | Layout 跨仓库 e2e | `bash scripts/run_layout_e2e.sh` | `ninja -C build test_layout_e2e` | P4 layout Conv → NHWC fold |
 | Broadcast 跨仓库 e2e | `bash scripts/run_broadcast_e2e.sh` | `ninja -C build test_broadcast_e2e` | P4 `lowering_broadcast.onnx` → fusion + linalg |
 | torch Conv+BN e2e | `bash scripts/run_torch_e2e.sh` | `ninja -C build test_torch_e2e` | `scripts/torch_export/conv_bn_model.py`（torch-mlir 导出）或 fixture → fusion |
-| JIT 数值 golden | `bash scripts/run_jit_golden.sh` | `ninja -C build test_jit_golden` | `pipe-demo --jit` vs NumPy（**6 项**：含 gelu/swiglu P4） |
+| JIT 数值校验 | `bash scripts/run_jit_golden.sh` | `ninja -C build test_jit_golden` | **6 项**：`.mlir` → 完整 pipeline → JIT 执行 → 与 NumPy 参考实现 `allclose`（含 gelu/swiglu） |
 | KV decode e2e | `bash scripts/run_kvcache_e2e.sh` | `ninja -C build test_kvcache_e2e` | P4 decode_step → fusion + P13 memplan |
 | Graph partition smoke | `bash scripts/run_partition_smoke.sh` | `ninja -C build test_partition_smoke` | P14 demo + `graph_partition_smoke.mlir` |
 | mlir-opt plugin | `build/tools/mlir-opt-plugin/run_aicom_mlir_opt.sh` | `ninja -C build test_mlir_opt_plugin` | 用 `aicom-fusion` pipeline 跑 fusion passes |
@@ -109,7 +109,7 @@ ninja -C build test_lit_filecheck      # LIT/FileCheck（39 项，需 lit + File
 ninja -C build test_quant_e2e          # Q/DQ MatMul 标注 + P4/P12 跨仓库 e2e
 ninja -C build test_dynamic_e2e        # 动态 batch + dynamic MN 跨仓库 e2e
 ninja -C build test_kvcache_e2e        # KV decode 跨仓库 e2e
-ninja -C build test_jit_golden         # JIT 数值 golden
+ninja -C build test_jit_golden         # JIT 数值校验：编译执行后和 NumPy 比对（6 项）
 ninja -C build test_layout_e2e         # NCHW→NHWC layout 跨仓库 e2e
 ninja -C build test_torch_e2e          # torch-mlir Conv+BN e2e（scripts/torch_export）
 ninja -C build test_broadcast_e2e      # numpy broadcast 跨仓库 e2e
@@ -159,10 +159,18 @@ bash scripts/run_pipeline_demo.sh
 ./build/tools/pipe-demo/pipe-demo \
   --input=test/mini_model.mlir --pipeline-stop-after=bufferize --loop-mode=scf-seq
 
-# JIT（matmul_add，检查数值）
+# JIT：编译并打印数值（只看 stdout 里的 JIT result，还不做自动比对）
 ./build/tools/pipe-demo/pipe-demo \
   --input=test/matmul_add.mlir --jit --loop-mode=scf-seq
 ```
+
+> **三种「和 JIT 有关」的检查，别混：**
+>
+> | 名字 | 命令 | 实际在干什么 |
+> |------|------|----------------|
+> | **手动看结果** | `pipe-demo --jit` | 编译 `.mlir` 并打印 `JIT result: …`，**不自动判对错** |
+> | **JIT smoke** | `test_shell_regression` 里那一行 | 只 `grep '1.5'`，确认路径没崩 |
+> | **JIT 数值校验** | `ninja test_jit_golden` | 对 6 个 case：跑 `--jit` → 解析打印的数组 → 和 NumPy 参考实现 `np.allclose` |
 
 ### CLI 参数
 
@@ -280,19 +288,44 @@ JIT demo 的限制（`tools/pipe-demo/main.cpp`）：
 JIT result (4 elements): 1.500000e+00, 2.500000e+00, 3.500000e+00, 4.500000e+00
 ```
 
-Shell regression 里用 `grep 1.5` 只检查**至少出现** `1.5`（第一个元素正确），并**不是**断言四个元素全是 `1.5`。
+Shell regression 里用 `grep 1.5` 只检查**至少出现** `1.5`（第一个元素正确），并**不是**断言四个元素全对——那只是 smoke。要**自动核对四个数都对**，用下面的 JIT 数值校验。
 
-| | 不加 `--jit` | 加 `--jit` |
-|--|--------------|-----------|
-| 目的 | 看/保存 IR | 验证数值是否正确 |
-| 输出 | MLIR（stdout 或 stderr trace） | `JIT result: …`（stdout） |
-| 典型输入 | `mini_model.mlir` 等 | `matmul_add.mlir` |
+#### JIT 数值校验：`test_jit_golden`（真正判对错）
+
+`pipe-demo --jit` 自己**只会打印数字**；真正做「和参考答案比对」的是脚本 `scripts/run_jit_golden.py`（Ninja target `test_jit_golden`）：
+
+```text
+每个 case：
+  .mlir ──► pipe-demo --jit（完整 pipeline → LLVM → ExecutionEngine）
+              └── 解析 stdout 里的 "JIT result (N elements): …"
+                    └── 和脚本里的 NumPy 参考实现 np.allclose → PASS/FAIL
+```
+
+| case | 输入 | 在比什么 |
+|------|------|----------|
+| `matmul_add` | `test/matmul_add.mlir` | MatMul+Bias → `[1.5, 2.5, 3.5, 4.5]` |
+| `jit_scale` | `test/jit_scale.mlir` | 常量 ×2 |
+| `jit_gelu` / `jit_gelu_p4` | 手写 / P4 导出的 GELU `.mlir` | GELU（P4 用 `atol=1e-3`） |
+| `jit_swiglu` / `jit_swiglu_p4` | 手写 / P4 导出的 SwiGLU `.mlir` | SwiGLU |
+
+```bash
+ninja -C build test_jit_golden          # 6 项全过才算数值对齐
+# 或：bash scripts/run_jit_golden.sh
+```
+
+这是本仓库**唯一**会「编译生成代码 → 执行 → 和 NumPy 参考实现逐元素比对」的测试。它和兄弟仓 `mlir_compiler` 的 `run_golden`（ORT vs NumPy，**不跑**任何 MLIR/JIT）不是一回事；详细对比见学习主文档 [§1.4](../mlir_compiler/src/mlir/gpu/docs/两仓库学习路径与代码导读.md#14-验证方式全景三种测试各验什么)。
+
+| | 不加 `--jit` | 加 `--jit`（手动） | `test_jit_golden` |
+|--|--------------|-------------------|-------------------|
+| 目的 | 看/保存 IR | 打印 JIT 算出的数 | **自动判对错** |
+| 输出 | MLIR | `JIT result: …` | PASS/FAIL（相对 NumPy） |
+| 典型输入 | `mini_model.mlir` 等 | `matmul_add.mlir` | 上表 6 个 case |
 
 ```bash
 # 只看 IR
 pipe-demo --input=test/matmul_add.mlir --loop-mode=scf-seq
 
-# 跑通并核对数值
+# 跑通并打印数值（要自动比对请用 test_jit_golden）
 pipe-demo --input=test/matmul_add.mlir --jit --loop-mode=scf-seq
 
 # 指定其他入口名（仅当 .mlir 里定义了对应 func 时有效）
@@ -309,7 +342,7 @@ pipe-demo --input=test/matmul_add.mlir \
 # 落盘：最终 LLVM IR
 pipe-demo --input=test/matmul_add.mlir --loop-mode=scf-seq > after-llvm.mlir
 
-# 验证：全 pipeline + JIT 数值
+# 验证：全 pipeline + JIT 打印数值（自动比对：ninja test_jit_golden）
 pipe-demo --input=test/matmul_add.mlir --jit --loop-mode=scf-seq
 ```
 
@@ -525,7 +558,7 @@ All requested tests passed.
 
 - **「全 pipeline」** 行（#1–#6）只证明 IR 里出现了 `@inference` 的 LLVM Lowering 结果，不检查具体数值。其中 #2 覆盖默认 `scf-par` 路径（`custom-linalg-to-parallel-loops`）；`matmul_add` 另覆盖 `scf-seq` / `affine` / `vector`（#1、#5、#6）。
 - **Fusion 行**（#7–#12）分别检查 Conv+BN 融合、ReLU→clamp 规范化、Softmax/RMSNorm/Attention 子图标注、常量折叠。
-- **JIT 行**（#16）的 `grep 1.5` 是**最小 smoke test**：`matmul_add` 手算结果为 `[[1.5,2.5],[3.5,4.5]]`，脚本只确认输出串里出现 `1.5`，并未断言四个元素全对。
+- **JIT 行**（#16）的 `grep 1.5` 是**最小 smoke test**：只确认路径没崩、输出里出现 `1.5`。**完整四个元素的自动比对**见上文 [JIT 数值校验](#jit-数值校验test_jit_golden真正判对错)（`test_jit_golden`）。
 - 需要更细的 IR 检查请用 LIT/FileCheck（`test_lit_filecheck`）。
 
 ### LIT（可选）
