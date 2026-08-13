@@ -192,6 +192,20 @@ if(FILECHECK_EXE AND LIT_EXE)
     WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
     COMMENT "Running AI compiler LIT tests")
 
+  add_custom_target(test_e2e
+    DEPENDS
+      test_attention_e2e
+      test_transformer_e2e
+      test_quant_e2e
+      test_dynamic_e2e
+      test_layout_e2e
+      test_broadcast_e2e
+      test_kvcache_e2e
+      test_partition_smoke
+      test_torch_e2e
+      test_mlir_opt_plugin
+    COMMENT "All cross-repo e2e (scripts pick ONNX and call P4 --mlir-only)")
+
   add_custom_target(test_all
     COMMAND bash ${CMAKE_SOURCE_DIR}/scripts/test_all.sh
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}

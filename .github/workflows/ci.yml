@@ -33,7 +33,7 @@ jobs:
         working-directory: mlir_compiler
         run: |
           cmake -B build -G Ninja
-          cmake --build build -j$(nproc) --target gen_lowering_models gen_quant_models run_golden run_calib_to_quant
+          cmake --build build -j$(nproc) --target gen_lowering_models gen_quant_models run_onnx_golden run_calib_to_quant
 
   mlir-pass-full:
     runs-on: ubuntu-22.04
