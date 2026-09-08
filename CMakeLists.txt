@@ -71,3 +71,17 @@ add_custom_target(
   WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
   DEPENDS pipe-demo
   COMMENT "Run full pipeline on all test .mlir files; write IR dumps to output/pipeline-dumps/latest/")
+
+# GPU matmul: Transform → nvgpu → LLVM IR → NVPTX → cubin ELF
+# (uses system mlir-opt/mlir-translate/llc/ptxas; see gpu_codegen/README.md)
+add_custom_target(
+  test_gpu_matmul_codegen
+  COMMAND bash ${CMAKE_SOURCE_DIR}/scripts/run_gpu_matmul_codegen.sh mma-sync
+  WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+  COMMENT "GPU matmul Transform→NVGPU→NVVM→LLVM IR→NVPTX cubin ELF smoke")
+
+add_custom_target(
+  test_gpu_matmul_tiling
+  COMMAND bash ${CMAKE_SOURCE_DIR}/scripts/run_gpu_matmul_codegen.sh tiling
+  WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+  COMMENT "GPU matmul CTA/warp tiling + vectorize + gpu.launch smoke")

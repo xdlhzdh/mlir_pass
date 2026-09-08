@@ -13,6 +13,10 @@ test/**/*.md
 output/
 *.out
 
+# Optional NVPTX llc fallback (apt llvm-18 extract; see gpu_codegen/README.md)
+third_party/llvm-18/
+third_party/llvm-18-stage/
+
 # LIT artifacts (must use build/test/lit via ninja test_lit_filecheck; ignore if created in-tree)
 test/lit/Output/
 test/lit/.lit_test_times.txt

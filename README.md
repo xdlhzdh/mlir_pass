@@ -4,10 +4,11 @@
 
 本仓提供：
 
-- **`pipe-demo`**：唯一的可执行文件。读入一份 `.mlir`（StableHLO），按固定 pipeline 依次跑 fusion → linalg → bufferize → loops/affine/vector → LLVM，输出最终 IR 或 JIT 执行结果。
+- **`pipe-demo`**：唯一的可执行文件。读入一份 `.mlir`（StableHLO），按固定 pipeline 依次跑 fusion → linalg → bufferize → loops/affine/vector → LLVM，输出最终 IR 或 JIT 执行结果（**CPU** 宿主机器码）。
+- **GPU matmul codegen**（`gpu_codegen/`）：Transform Dialect 对 matmul 做 tiling / vectorize / tensorize，降到 `gpu`/`nvgpu` → `nvvm`/`llvm`，再经 `mlir-translate` → `llc -march=nvptx64` → `ptxas` 生成 **cubin ELF**。详见 [gpu_codegen/README](./gpu_codegen/README.md)。
 - **28 个自定义 teaching pass**（`lib/Transforms/`）：19 个 fusion（Conv+BN、Softmax、Attention 等子图识别与标注）+ 9 个中后端（linalg 折叠、buffer 提升、loop tiling、vector 简化、LLVM 清理）。用官方 `PassManager` 编排，源码在 `lib/Pipeline/`。
 - **`AICompilerPlugin`**：把 fusion pass 打包成 `mlir-opt` 可加载的 plugin（`tools/mlir-opt-plugin/`）。
-- **测试体系**：Shell regression（粗粒度 grep）、LIT/FileCheck（IR 结构断言）、JIT 数值校验（编译执行后和 NumPy 比对）、跨仓 e2e（多数为兄弟仓 P4 导出 → 本仓 fusion）。
+- **测试体系**：Shell regression（粗粒度 grep）、LIT/FileCheck（IR 结构断言）、JIT 数值校验（编译执行后和 NumPy 比对）、跨仓 e2e（多数为兄弟仓 P4 导出 → 本仓 fusion）、GPU codegen smoke。
 
 输入来源：`test/` 下的手写 `.mlir`，或兄弟仓 P4 导出的标准 StableHLO 文本。交接说明见 [mlir_compiler README · 与 mlir_pass 的接口](../mlir_compiler/README.md#mlir-pass-interface)。
 
@@ -143,10 +144,41 @@ func.func @inference() -> tensor<2x2xf32> {
 ### Pipeline 总览
 
 ```text
+# CPU（pipe-demo）
 StableHLO → Linalg → bufferize(memref)
   → scf-seq / scf-par / affine / vector  (--loop-mode)
   → CF → LLVM Dialect → JIT
+
+# GPU matmul（scripts/run_gpu_matmul_codegen.sh）
+linalg.matmul
+  → Transform (tile / vectorize / tensorize)
+  → gpu / nvgpu → nvvm / llvm dialect
+  → mlir-translate → LLVM IR
+  → llc -march=nvptx64 → PTX → ptxas → cubin ELF
 ```
+
+<a id="gpu-matmul-codegen"></a>
+
+### GPU Matmul Codegen（Transform → NVPTX ELF）
+
+与 `pipe-demo` 的 CPU JIT 并列的一条 **device** 路径。详细说明与工具链（含 NVPTX `llc` 回退）见 [gpu_codegen/README](./gpu_codegen/README.md)。
+
+```bash
+# Tensor Core：nvgpu.mma.sync → LLVM IR → PTX → cubin ELF
+./scripts/run_gpu_matmul_codegen.sh mma-sync
+
+# Buddy 风格 CTA/warp tiling + vectorize + gpu.launch（中间 IR）
+./scripts/run_gpu_matmul_codegen.sh tiling
+
+ninja -C build test_gpu_matmul_codegen   # 等价于 mma-sync smoke
+```
+
+| 文件 | 作用 |
+|------|------|
+| `gpu_codegen/matmul_mma_sync.mlir` | payload 已是 1 CTA × 1 warp × 16×8×16；`rewrite_matmul_as_mma_sync` 按 lane 拼 fragment（**不做** CTA/K/warp tiling） |
+| `gpu_codegen/matmul_tiling.mlir` | 256³ GEMM：Transform 显式 CTA/K/warp tile → vectorize → `gpu.launch`（**不**调用 `rewrite_matmul_as_mma_sync`） |
+| `scripts/run_gpu_matmul_codegen.sh` | 整条 lowering + `mlir-translate` + NVPTX + `ptxas` |
+| `scripts/sanitize_llvm_ir_for_nvptx.py` | 新版 LLVM IR 文本降级，便于较老 `llc` |
 
 | Stage | `--pipeline-stop-after` | 做什么 | 自定义 pass |
 |-------|-------------------------|--------|-------------|
@@ -331,6 +363,7 @@ ninja -C build run_pipeline_demo    # 把各 stage IR 写到 output/pipeline-dum
 
 ## 相关文档
 
+- [GPU matmul codegen（Transform → NVPTX ELF）](./gpu_codegen/README.md)
 - [Affine/Vector lowering 设计](./docs/superpowers/specs/2026-06-16-affine-vector-lowering-design.md)
 - [设计规格](./docs/superpowers/specs/2026-05-23-mlir-ai-compiler-demo-design.md)
 - [实现计划](./docs/superpowers/plans/2026-05-23-mlir-ai-compiler-demo.md)
