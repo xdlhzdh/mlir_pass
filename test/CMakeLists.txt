@@ -61,6 +61,8 @@ if(FILECHECK_EXE AND LIT_EXE)
        DESTINATION "${_lit_dir}")
   file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/lit/loops_smoke.mlir"
        DESTINATION "${_lit_dir}")
+  file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/lit/scf_par_lowering.mlir"
+       DESTINATION "${_lit_dir}")
   file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/lit/gelu_legalize.mlir"
        DESTINATION "${_lit_dir}")
   file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/lit/canonicalize_cse_smoke.mlir"

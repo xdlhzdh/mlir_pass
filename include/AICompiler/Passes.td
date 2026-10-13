@@ -301,10 +301,13 @@ def CustomBufferOpt : Pass<"custom-buffer-opt", "func::FuncOp"> {
 def CustomLinalgToParallelLoops : Pass<"custom-linalg-to-parallel-loops", "func::FuncOp"> {
   let summary = "Lower parallel linalg ops to scf.parallel loops (teaching)";
   let description = [{
-    Custom replacement for `convert-linalg-to-parallel-loops` on supported ops:
-    - elementwise `linalg.generic` (all-parallel, identity maps, static memref)
-      -> nested `scf.parallel` with memref load/compute/store
-    - `linalg.matmul` (2D static) -> `scf.parallel` over (i,j) + `scf.for` on k
+    Custom lowering that runs before `convert-linalg-to-parallel-loops`; ops it
+    does not match are left for the upstream pass:
+    - elementwise `linalg.generic` (all-parallel, identity maps, static memref,
+      no `linalg.index`) -> nested `scf.parallel` with memref load/compute/store
+    - `linalg.fill` (static memref) -> `scf.parallel` store nest
+    - `linalg.matmul` (2D static, float) -> `scf.parallel` over (i,j) +
+      `scf.for` on k accumulating into the loaded C[i,j] via `iter_args`
   }];
   let constructor = "mlir::aicom::createCustomLinalgToParallelLoopsPass()";
   let dependentDialects = [

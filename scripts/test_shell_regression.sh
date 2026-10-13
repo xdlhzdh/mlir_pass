@@ -19,6 +19,10 @@ grep -q 'llvm.func @inference' <<<"${out}"
 echo "== full pipeline → LLVM: matmul_add.mlir (loop-mode=scf-par, default) =="
 out_par="$("${DEMO}" --input="${ROOT}/test/matmul_add.mlir" --loop-mode=scf-par 2>&1)"
 grep -q 'llvm.func @inference' <<<"${out_par}"
+if grep -qE 'linalg\.|unrealized_conversion_cast' <<<"${out_par}"; then
+  echo "error: scf-par left linalg ops or unrealized casts in LLVM output" >&2
+  exit 1
+fi
 
 echo "== full pipeline → LLVM: conv_bn_relu.mlir (loop-mode=scf-seq) =="
 out_conv="$("${DEMO}" --input="${ROOT}/test/conv_bn_relu.mlir" --loop-mode=scf-seq 2>&1)"
@@ -217,6 +221,11 @@ echo "== JIT smoke: matmul_add.mlir (--jit --loop-mode=scf-seq) → JIT result c
 jit_out="$("${DEMO}" --input="${ROOT}/test/matmul_add.mlir" --jit --loop-mode=scf-seq 2>&1)"
 grep -q 'JIT result' <<<"${jit_out}"
 grep -q '1.5' <<<"${jit_out}"
+
+echo "== JIT smoke: matmul_add.mlir (--jit --loop-mode=scf-par) → JIT result contains 1.5 =="
+jit_par_out="$("${DEMO}" --input="${ROOT}/test/matmul_add.mlir" --jit --loop-mode=scf-par 2>&1)"
+grep -q 'JIT result' <<<"${jit_par_out}"
+grep -q '1.5' <<<"${jit_par_out}"
 
 echo "== compat: matmul_add.mlir (--no-vectorize) → LLVM (alias of loop-mode=scf-seq) =="
 legacy_out="$("${DEMO}" --input="${ROOT}/test/matmul_add.mlir" --no-vectorize 2>&1)"

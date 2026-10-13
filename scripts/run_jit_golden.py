@@ -123,32 +123,39 @@ CASES = [
 ]
 
 
+LOOP_MODES = ("scf-seq", "scf-par")
+
+
 def main() -> int:
     failed = 0
+    total = 0
     for name, mlir_path, ref_fn, rtol, atol in CASES:
-        if not mlir_path.is_file():
-            print(f"  SKIP {name}: missing {mlir_path}", file=sys.stderr)
-            failed += 1
-            continue
-        try:
-            got = run_jit(mlir_path)
-            expected = ref_fn()
-            if got.shape != expected.shape or not np.allclose(
-                got, expected, rtol=rtol, atol=atol
-            ):
-                print(f"  FAIL {name}: max diff {np.max(np.abs(got - expected))}")
-                print(f"    got:      {got}")
-                print(f"    expected: {expected}")
+        for loop_mode in LOOP_MODES:
+            total += 1
+            label = f"{name} [{loop_mode}]"
+            if not mlir_path.is_file():
+                print(f"  SKIP {label}: missing {mlir_path}", file=sys.stderr)
                 failed += 1
-            else:
-                print(f"  PASS {name} ({got.size} elements)")
-        except Exception as exc:  # noqa: BLE001 — teaching script
-            print(f"  FAIL {name}: {exc}", file=sys.stderr)
-            failed += 1
+                continue
+            try:
+                got = run_jit(mlir_path, loop_mode)
+                expected = ref_fn()
+                if got.shape != expected.shape or not np.allclose(
+                    got, expected, rtol=rtol, atol=atol
+                ):
+                    print(f"  FAIL {label}: max diff {np.max(np.abs(got - expected))}")
+                    print(f"    got:      {got}")
+                    print(f"    expected: {expected}")
+                    failed += 1
+                else:
+                    print(f"  PASS {label} ({got.size} elements)")
+            except Exception as exc:  # noqa: BLE001 — teaching script
+                print(f"  FAIL {label}: {exc}", file=sys.stderr)
+                failed += 1
     if failed:
         print(f"\n{failed} JIT golden check(s) failed.", file=sys.stderr)
         return 1
-    print(f"\nAll {len(CASES)} JIT golden checks passed.")
+    print(f"\nAll {total} JIT golden checks passed.")
     return 0
 
 

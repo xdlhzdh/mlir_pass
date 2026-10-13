@@ -46,7 +46,7 @@ struct ElementwiseGenericToParallelLoops
                                 PatternRewriter &rewriter) const override {
     if (!isAllParallel(op) || !allIdentityMaps(op))
       return failure();
-    if (op.getNumDpsInits() != 1)
+    if (op.getNumDpsInits() != 1 || op.hasIndexSemantics())
       return failure();
 
     auto outType =
@@ -96,11 +96,8 @@ struct ElementwiseGenericToParallelLoops
             map.map(oldBlock.getArgument(argIdx), loaded);
           }
 
-          for (auto &bodyOp : oldBlock.without_terminator()) {
-            if (isa<linalg::IndexOp>(bodyOp))
-              continue;
+          for (auto &bodyOp : oldBlock.without_terminator())
             b.clone(bodyOp, map);
-          }
 
           auto yield = cast<linalg::YieldOp>(oldBlock.getTerminator());
           Value result = map.lookupOrDefault(yield.getOperand(0));
@@ -112,7 +109,41 @@ struct ElementwiseGenericToParallelLoops
   }
 };
 
-/// Lower `linalg.matmul` to parallel loops over (i, j) + reduction loop on k.
+/// Lower `linalg.fill` on a static memref to an `scf.parallel` store nest.
+struct FillToParallelLoops : public OpRewritePattern<linalg::FillOp> {
+  using OpRewritePattern::OpRewritePattern;
+
+  LogicalResult matchAndRewrite(linalg::FillOp op,
+                                PatternRewriter &rewriter) const override {
+    if (op.getNumDpsInits() != 1)
+      return failure();
+    auto outType =
+        dyn_cast<MemRefType>(op.getDpsInitOperand(0)->get().getType());
+    if (!outType || !outType.hasStaticShape() || outType.getRank() == 0)
+      return failure();
+
+    Location loc = op.getLoc();
+    SmallVector<Value> lbs, ubs, steps;
+    for (int64_t d = 0; d < outType.getRank(); ++d) {
+      lbs.push_back(constantIndex(rewriter, loc, 0));
+      ubs.push_back(constantIndex(rewriter, loc, outType.getDimSize(d)));
+      steps.push_back(constantIndex(rewriter, loc, 1));
+    }
+
+    Value value = op.getDpsInputOperand(0)->get();
+    Value outMemref = op.getDpsInitOperand(0)->get();
+    scf::ParallelOp::create(
+        rewriter, loc, lbs, ubs, steps,
+        [&](OpBuilder &b, Location bodyLoc, ValueRange ivs) {
+          memref::StoreOp::create(b, bodyLoc, value, outMemref, ivs);
+        });
+    rewriter.eraseOp(op);
+    return success();
+  }
+};
+
+/// Lower `linalg.matmul` (C += A * B) to parallel loops over (i, j) and a
+/// reduction loop on k that accumulates into the loaded C[i, j].
 struct MatmulToParallelLoops : public OpRewritePattern<linalg::MatmulOp> {
   using OpRewritePattern::OpRewritePattern;
 
@@ -132,6 +163,10 @@ struct MatmulToParallelLoops : public OpRewritePattern<linalg::MatmulOp> {
       return failure();
     if (lhsTy.getRank() != 2 || rhsTy.getRank() != 2 || outTy.getRank() != 2)
       return failure();
+    if (!isa<FloatType>(outTy.getElementType()) ||
+        lhsTy.getElementType() != outTy.getElementType() ||
+        rhsTy.getElementType() != outTy.getElementType())
+      return failure();
 
     int64_t m = lhsTy.getDimSize(0);
     int64_t kDim = lhsTy.getDimSize(1);
@@ -147,12 +182,6 @@ struct MatmulToParallelLoops : public OpRewritePattern<linalg::MatmulOp> {
     Value kUb = constantIndex(rewriter, loc, kDim);
 
     Type elemTy = outTy.getElementType();
-    Value zeroVal = mlir::isa<FloatType>(elemTy)
-                        ? arith::ConstantOp::create(
-                              rewriter, loc, elemTy,
-                              rewriter.getFloatAttr(elemTy, 0.0))
-                        : arith::ConstantOp::create(rewriter, loc, elemTy,
-                                                     rewriter.getZeroAttr(elemTy));
 
     scf::ParallelOp parallel = scf::ParallelOp::create(
         rewriter, loc, ValueRange{c0, c0}, ValueRange{mUb, nUb},
@@ -160,8 +189,10 @@ struct MatmulToParallelLoops : public OpRewritePattern<linalg::MatmulOp> {
         [&](OpBuilder &b, Location bodyLoc, ValueRange ivs) {
           Value i = ivs[0];
           Value j = ivs[1];
+          Value init =
+              memref::LoadOp::create(b, bodyLoc, elemTy, out, ValueRange{i, j});
           auto loop = scf::ForOp::create(b, bodyLoc, c0, kUb, c1,
-                                         ValueRange{zeroVal});
+                                         ValueRange{init});
           b.setInsertionPointToStart(loop.getBody());
           Value k = loop.getInductionVar();
           Value acc = loop.getRegionIterArgs()[0];
@@ -187,8 +218,8 @@ struct CustomLinalgToParallelLoopsPass
           CustomLinalgToParallelLoopsPass> {
   void runOnOperation() override {
     RewritePatternSet patterns(&getContext());
-    patterns.add<ElementwiseGenericToParallelLoops, MatmulToParallelLoops>(
-        &getContext());
+    patterns.add<ElementwiseGenericToParallelLoops, FillToParallelLoops,
+                 MatmulToParallelLoops>(&getContext());
     if (failed(applyPatternsGreedily(getOperation(), std::move(patterns))))
       signalPassFailure();
   }
