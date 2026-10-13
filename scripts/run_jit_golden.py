@@ -31,6 +31,8 @@ def run_jit(mlir_path: Path, loop_mode: str = "scf-seq") -> np.ndarray:
         capture_output=True,
         text=True,
         check=False,
+        # A crash inside JIT code can deadlock LLVM's signal handler.
+        timeout=120,
     )
     out = proc.stdout + proc.stderr
     if proc.returncode != 0:
@@ -79,20 +81,25 @@ def ref_gelu_p4() -> np.ndarray:
     return (0.5 * x * (1.0 + np.vectorize(erf)(x / np.sqrt(2.0)))).reshape(-1)
 
 
-def ref_conv_jit() -> np.ndarray:
+def _conv_bn_relu_nhwc() -> np.ndarray:
+    # NHWC input 1x2x2x1, HWIO 1x1 kernel with 2 output features.
     inp = np.array([[[[1.0], [2.0]], [[3.0], [4.0]]]], dtype=np.float32)
     w = np.full((1, 1, 1, 2), 0.5, dtype=np.float32)
-    # NCHW conv 1x1, stride 1: output channels 2
-    out = np.zeros((1, 2, 2, 2), dtype=np.float32)
-    for b in range(1):
-        for oc in range(2):
-            for h in range(2):
-                for wi in range(2):
-                    s = 0.0
-                    for ic in range(1):
-                        s += inp[b, ic, h, wi] * w[0, 0, ic, oc]
-                    out[b, oc, h, wi] = s
-    return out.reshape(-1)
+    conv = np.einsum("nhwc,co->nhwo", inp, w[0, 0])
+    scale, offset, mean, var, eps = 1.0, 0.0, 0.0, 1.0, 1e-5
+    bn = (conv - mean) * scale / np.sqrt(var + eps) + offset
+    return np.maximum(bn, 0.0).astype(np.float32)
+
+
+def ref_conv_bn_relu() -> np.ndarray:
+    return _conv_bn_relu_nhwc().reshape(-1)
+
+
+def ref_mini_model() -> np.ndarray:
+    flat = _conv_bn_relu_nhwc().reshape(1, 8)
+    fc_w = np.zeros((8, 2), dtype=np.float32)
+    fc_w[0, 0] = fc_w[1, 1] = 1.0
+    return (flat @ fc_w + 0.1).reshape(-1)
 
 
 CASES = [
@@ -111,6 +118,8 @@ CASES = [
      RTOL_GELU_P4, ATOL_GELU_P4),
     ("jit_swiglu", ROOT / "test/jit_swiglu.mlir", ref_swiglu, RTOL, ATOL),
     ("jit_swiglu_p4", ROOT / "test/fixtures/swiglu_p4_jit.mlir", ref_swiglu, RTOL, ATOL),
+    ("conv_bn_relu", ROOT / "test/conv_bn_relu.mlir", ref_conv_bn_relu, RTOL, ATOL),
+    ("mini_model", ROOT / "test/mini_model.mlir", ref_mini_model, RTOL, ATOL),
 ]
 
 

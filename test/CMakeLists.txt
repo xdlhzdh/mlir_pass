@@ -49,6 +49,8 @@ if(FILECHECK_EXE AND LIT_EXE)
        DESTINATION "${_lit_dir}")
   file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/lit/bufferize_smoke.mlir"
        DESTINATION "${_lit_dir}")
+  file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/lit/buffer_promotion_escape.mlir"
+       DESTINATION "${_lit_dir}")
   file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/lit/softmax_fusion_e2e.mlir"
        DESTINATION "${_lit_dir}")
   file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/lit/layernorm_legalize.mlir"
