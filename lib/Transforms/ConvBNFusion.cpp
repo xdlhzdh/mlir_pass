@@ -45,6 +45,11 @@ struct ConvBNFusionPattern
     if (!convOp)
       return failure();
 
+    auto dimNumbers = convOp.getDimensionNumbers();
+    if (bnOp.getFeatureIndex() !=
+        static_cast<uint64_t>(dimNumbers.getOutputFeatureDimension()))
+      return failure();
+
     auto gammaAttr = getFpConstantAttr(bnOp.getScale());
     auto betaAttr = getFpConstantAttr(bnOp.getOffset());
     auto meanAttr = getFpConstantAttr(bnOp.getMean());
@@ -74,7 +79,7 @@ struct ConvBNFusionPattern
     auto weightVals = weightAttr.getValues<float>();
     int numChannels = static_cast<int>(scaleFactor.size());
     auto weightShape = weightAttr.getType().getShape();
-    int64_t weightFeatureIndex = bnOp.getFeatureIndex();
+    int64_t weightFeatureIndex = dimNumbers.getKernelOutputFeatureDimension();
     if (weightFeatureIndex >= static_cast<int64_t>(weightShape.size()) ||
         weightShape[weightFeatureIndex] != numChannels)
       return failure();
